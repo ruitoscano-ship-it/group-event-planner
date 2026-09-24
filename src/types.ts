@@ -8,10 +8,19 @@ export type MenuItem = {
   isAlaCarte: boolean
 }
 
+export type GroupMember = {
+  id: string
+  name: string
+  menuItemIds: string[]
+  allergies: string
+}
+
 export type Attendee = {
   id: string
   name: string
   registeredBy: string
+  email: string
+  phone: string
   menuItemIds: string[]
   allergies: string
   notes: string
@@ -20,6 +29,8 @@ export type Attendee = {
   /** Family / group registration */
   isGroup: boolean
   groupSize: number
+  /** Per-person menu picks when registering as a group */
+  members: GroupMember[]
 }
 
 export type Gathering = {

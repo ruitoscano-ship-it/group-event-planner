@@ -27,11 +27,27 @@ function normalizeGathering(raw: Gathering): Gathering {
       isAlaCarte: Boolean(m.isAlaCarte),
       price: m.isAlaCarte ? 0 : Number(m.price) || 0,
     })),
-    attendees: (raw.attendees || []).map((a) => ({
-      ...a,
-      isGroup: Boolean(a.isGroup),
-      groupSize: a.isGroup ? Math.max(1, Number(a.groupSize) || 1) : 1,
-    })),
+    attendees: (raw.attendees || []).map((a) => {
+      const members = Array.isArray(a.members)
+        ? a.members.map((m) => ({
+            id: m.id || newId('m'),
+            name: (m.name || '').trim(),
+            menuItemIds: Array.isArray(m.menuItemIds) ? m.menuItemIds : [],
+            allergies: (m.allergies || '').trim(),
+          }))
+        : []
+      const isGroup = Boolean(a.isGroup)
+      return {
+        ...a,
+        email: (a.email || '').trim(),
+        phone: (a.phone || '').trim(),
+        isGroup,
+        members,
+        groupSize: isGroup
+          ? Math.max(1, members.length || Number(a.groupSize) || 1)
+          : 1,
+      }
+    }),
   }
 }
 
@@ -243,17 +259,35 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     }
     if (!body?.name?.trim()) return error('Guest name is required')
     const isGroup = Boolean(body.isGroup)
+    const members = isGroup && Array.isArray(body.members)
+      ? body.members.map((m) => ({
+          id: m.id || newId('m'),
+          name: (m.name || '').trim(),
+          menuItemIds: Array.isArray(m.menuItemIds) ? m.menuItemIds : [],
+          allergies: (m.allergies || '').trim(),
+        }))
+      : []
+    if (isGroup && members.length === 0) {
+      return error('Add at least one group member with a menu choice')
+    }
     const attendee: Attendee = {
       id: newId('guest'),
       name: body.name.trim(),
       registeredBy: (body.registeredBy || body.name).trim(),
-      menuItemIds: Array.isArray(body.menuItemIds) ? body.menuItemIds : [],
+      email: (body.email || '').trim(),
+      phone: (body.phone || '').trim(),
+      menuItemIds: isGroup
+        ? []
+        : Array.isArray(body.menuItemIds)
+          ? body.menuItemIds
+          : [],
       allergies: (body.allergies || '').trim(),
       notes: (body.notes || '').trim(),
       amountPaid: Number(body.amountPaid) || 0,
       createdAt: new Date().toISOString(),
       isGroup,
-      groupSize: isGroup ? Math.max(1, Number(body.groupSize) || 1) : 1,
+      members,
+      groupSize: isGroup ? Math.max(1, members.length) : 1,
     }
     gathering.attendees.push(attendee)
     await writeGathering(env.DB, gathering, false)
@@ -271,18 +305,27 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       const body = (await request.json()) as Partial<Attendee>
       const idx = gathering.attendees.findIndex((a) => a.id === attendeeId)
       if (idx === -1) return error('Attendee not found', 404)
+      const current = gathering.attendees[idx]
+      const members =
+        body.members !== undefined
+          ? Array.isArray(body.members)
+            ? body.members.map((m) => ({
+                id: m.id || newId('m'),
+                name: (m.name || '').trim(),
+                menuItemIds: Array.isArray(m.menuItemIds) ? m.menuItemIds : [],
+                allergies: (m.allergies || '').trim(),
+              }))
+            : []
+          : current.members || []
+      const isGroup =
+        body.isGroup !== undefined ? Boolean(body.isGroup) : current.isGroup
       gathering.attendees[idx] = {
-        ...gathering.attendees[idx],
+        ...current,
         ...body,
         id: attendeeId,
-        isGroup:
-          body.isGroup !== undefined
-            ? Boolean(body.isGroup)
-            : gathering.attendees[idx].isGroup,
-        groupSize:
-          body.groupSize !== undefined
-            ? Math.max(1, Number(body.groupSize) || 1)
-            : gathering.attendees[idx].groupSize,
+        isGroup,
+        members: isGroup ? members : [],
+        groupSize: isGroup ? Math.max(1, members.length || Number(body.groupSize) || 1) : 1,
       }
       await writeGathering(env.DB, gathering, false)
       return json(gathering)

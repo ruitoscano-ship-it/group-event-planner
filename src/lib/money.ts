@@ -1,4 +1,4 @@
-import type { Attendee, Gathering, MenuItem } from '../types'
+import type { Attendee, Gathering, GroupMember, MenuItem } from '../types'
 
 export function formatMoney(
   amount: number,
@@ -28,25 +28,56 @@ export function formatDate(date: string, locale = 'pt-PT', dateTbd = 'Date TBD')
   })
 }
 
+export function createMemberDraft(partial?: Partial<GroupMember>): GroupMember {
+  return {
+    id: `m_${crypto.randomUUID().slice(0, 8)}`,
+    name: '',
+    menuItemIds: [],
+    allergies: '',
+    ...partial,
+  }
+}
+
 export function partySize(attendee: Attendee): number {
-  if (attendee.isGroup) return Math.max(1, attendee.groupSize || 1)
+  if (attendee.isGroup) {
+    if (attendee.members?.length) return attendee.members.length
+    return Math.max(1, attendee.groupSize || 1)
+  }
   return 1
 }
 
-export function selectionHasAlaCarte(attendee: Attendee, menu: MenuItem[]): boolean {
-  return attendee.menuItemIds.some((id) => menu.find((m) => m.id === id)?.isAlaCarte)
-}
-
-export function attendeeUnitPrice(attendee: Attendee, menu: MenuItem[]): number {
-  return attendee.menuItemIds.reduce((sum, id) => {
+export function unitPriceForIds(ids: string[], menu: MenuItem[]): number {
+  return ids.reduce((sum, id) => {
     const item = menu.find((m) => m.id === id)
     if (!item || item.isAlaCarte) return sum
     return sum + (item.price ?? 0)
   }, 0)
 }
 
+export function idsHaveAlaCarte(ids: string[], menu: MenuItem[]): boolean {
+  return ids.some((id) => menu.find((m) => m.id === id)?.isAlaCarte)
+}
+
+export function selectionHasAlaCarte(attendee: Attendee, menu: MenuItem[]): boolean {
+  if (attendee.isGroup && attendee.members?.length) {
+    return attendee.members.some((m) => idsHaveAlaCarte(m.menuItemIds, menu))
+  }
+  return idsHaveAlaCarte(attendee.menuItemIds, menu)
+}
+
+export function attendeeUnitPrice(attendee: Attendee, menu: MenuItem[]): number {
+  return unitPriceForIds(attendee.menuItemIds, menu)
+}
+
 export function attendeeTotal(attendee: Attendee, menu: MenuItem[]): number {
-  return attendeeUnitPrice(attendee, menu) * partySize(attendee)
+  if (attendee.isGroup && attendee.members?.length) {
+    return attendee.members.reduce(
+      (sum, m) => sum + unitPriceForIds(m.menuItemIds, menu),
+      0,
+    )
+  }
+  // Legacy groups: one shared menu × people
+  return unitPriceForIds(attendee.menuItemIds, menu) * partySize(attendee)
 }
 
 export function gatheringTotals(gathering: Gathering) {
@@ -72,6 +103,23 @@ export function menuLabel(
   return ids
     .map((id) => menu.find((m) => m.id === id)?.name ?? 'Unknown')
     .join(', ')
+}
+
+/** Toggle menu selection with exclusivity between fixed menus and à la carte. */
+export function toggleMenuSelection(
+  currentIds: string[],
+  itemId: string,
+  menu: MenuItem[],
+): string[] {
+  const item = menu.find((m) => m.id === itemId)
+  if (!item) return currentIds
+  const selected = currentIds.includes(itemId)
+  if (selected) return currentIds.filter((x) => x !== itemId)
+  if (item.isAlaCarte) return [itemId]
+  const withoutAla = currentIds.filter(
+    (x) => !menu.find((m) => m.id === x)?.isAlaCarte,
+  )
+  return [...withoutAla, itemId]
 }
 
 /** Compress an image file to a JPEG data URL suitable for D1 storage. */

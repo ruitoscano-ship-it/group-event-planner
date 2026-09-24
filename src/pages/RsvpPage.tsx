@@ -1,14 +1,21 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
+import { MenuPicker } from '../components/MenuPicker'
 import { useI18n } from '../i18n/I18nContext'
 import {
-  attendeeUnitPrice,
+  attendeeTotal,
+  createMemberDraft,
   formatDate,
   formatMoney,
+  idsHaveAlaCarte,
+  menuLabel,
   partySize,
+  toggleMenuSelection,
+  unitPriceForIds,
 } from '../lib/money'
 import { useGatherings } from '../store/GatheringsContext'
+import type { GroupMember } from '../types'
 
 export function RsvpPage() {
   const { eventId = '' } = useParams()
@@ -22,9 +29,14 @@ export function RsvpPage() {
   const [registeredBy, setRegisteredBy] = useState('')
   const [forSomeoneElse, setForSomeoneElse] = useState(false)
   const [asGroup, setAsGroup] = useState(false)
-  const [groupSize, setGroupSize] = useState(2)
+  const [members, setMembers] = useState<GroupMember[]>(() => [
+    createMemberDraft(),
+    createMemberDraft(),
+  ])
   const [menuItemIds, setMenuItemIds] = useState<string[]>([])
   const [allergies, setAllergies] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [notes, setNotes] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -49,25 +61,19 @@ export function RsvpPage() {
 
   const estimated = useMemo(() => {
     if (!gathering) return 0
-    const fake = {
-      id: '',
-      name: '',
-      registeredBy: '',
-      menuItemIds,
-      allergies: '',
-      notes: '',
-      amountPaid: 0,
-      createdAt: '',
-      isGroup: asGroup,
-      groupSize: asGroup ? groupSize : 1,
+    if (asGroup) {
+      return members.reduce((sum, m) => sum + unitPriceForIds(m.menuItemIds, gathering.menu), 0)
     }
-    return attendeeUnitPrice(fake, gathering.menu) * partySize(fake)
-  }, [gathering, menuItemIds, asGroup, groupSize])
+    return unitPriceForIds(menuItemIds, gathering.menu)
+  }, [gathering, asGroup, members, menuItemIds])
 
   const hasAlaCartePick = useMemo(() => {
     if (!gathering) return false
-    return menuItemIds.some((id) => gathering.menu.find((m) => m.id === id)?.isAlaCarte)
-  }, [gathering, menuItemIds])
+    if (asGroup) {
+      return members.some((m) => idsHaveAlaCarte(m.menuItemIds, gathering.menu))
+    }
+    return idsHaveAlaCarte(menuItemIds, gathering.menu)
+  }, [gathering, asGroup, members, menuItemIds])
 
   if (fetching) {
     return <div className="empty">{t('loadingRsvp')}</div>
@@ -103,25 +109,22 @@ export function RsvpPage() {
           ? t('typeBrunch')
           : t('typeOther')
 
-  function toggleItem(id: string) {
+  function updateMember(id: string, patch: Partial<GroupMember>) {
+    setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)))
+  }
+
+  function toggleMemberMenu(memberId: string, itemId: string) {
     if (!gathering) return
-    const item = gathering.menu.find((m) => m.id === id)
-    if (!item) return
-
-    setMenuItemIds((prev) => {
-      const selected = prev.includes(id)
-      if (selected) return prev.filter((x) => x !== id)
-
-      if (item.isAlaCarte) {
-        // À la carte is exclusive vs fixed menus
-        return [id]
-      }
-      // Fixed menus clear any à la carte pick
-      const withoutAla = prev.filter(
-        (x) => !gathering.menu.find((m) => m.id === x)?.isAlaCarte,
-      )
-      return [...withoutAla, id]
-    })
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.id === memberId
+          ? {
+              ...m,
+              menuItemIds: toggleMenuSelection(m.menuItemIds, itemId, gathering.menu),
+            }
+          : m,
+      ),
+    )
   }
 
   async function onSubmit(e: FormEvent) {
@@ -131,26 +134,49 @@ export function RsvpPage() {
       ? registeredBy.trim() || 'Someone'
       : name.trim()
 
+    if (asGroup) {
+      if (members.length === 0) {
+        setSubmitError(t('needMembers'))
+        return
+      }
+      const incomplete = members.some((m) => !m.name.trim() || m.menuItemIds.length === 0)
+      if (incomplete) {
+        setSubmitError(t('needMemberMenus'))
+        return
+      }
+    }
+
     setSaving(true)
     setSubmitError(null)
     try {
       await addAttendee(gathering.id, {
         name: name.trim(),
         registeredBy: registrar,
-        menuItemIds,
-        allergies: allergies.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        menuItemIds: asGroup ? [] : menuItemIds,
+        allergies: asGroup ? '' : allergies.trim(),
         notes: notes.trim(),
         isGroup: asGroup,
-        groupSize: asGroup ? Math.max(1, groupSize) : 1,
+        groupSize: asGroup ? members.length : 1,
+        members: asGroup
+          ? members.map((m) => ({
+              ...m,
+              name: m.name.trim(),
+              allergies: m.allergies.trim(),
+            }))
+          : [],
       })
       setSubmitted(true)
       setName('')
       setRegisteredBy('')
       setForSomeoneElse(false)
       setAsGroup(false)
-      setGroupSize(2)
+      setMembers([createMemberDraft(), createMemberDraft()])
       setMenuItemIds([])
       setAllergies('')
+      setEmail('')
+      setPhone('')
       setNotes('')
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : t('rsvpSaveFailed'))
@@ -168,15 +194,27 @@ export function RsvpPage() {
         </Link>
         <div className="nav-actions">
           <LanguageSwitcher />
-          <Link viewTransition className="btn btn-ghost btn-sm" to={`/events/${gathering.id}`}>
-            {t('organizerView')}
-          </Link>
         </div>
       </header>
 
-      <div className="page-header">
+      <div className="event-summary-card">
+        <h2>{gathering.title}</h2>
+        <p>
+          {typeLabel}
+          {' · '}
+          {formatDate(gathering.date, localeTag, t('dateTbd'))}
+          {gathering.time ? ` · ${gathering.time}` : ''}
+          {' · '}
+          {gathering.location || t('locationTbd')}
+        </p>
+      </div>
+
+      <div className="page-header desktop-page-header">
         <div>
-          <div className="meta" style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.6rem' }}>
+          <div
+            className="meta"
+            style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.6rem', flexWrap: 'wrap' }}
+          >
             <span className="chip">{typeLabel}</span>
             <span className="chip chip-warm">
               {formatDate(gathering.date, localeTag, t('dateTbd'))}
@@ -192,27 +230,27 @@ export function RsvpPage() {
       </div>
 
       {gathering.menuCardUrl && (
-        <div className="menu-card-preview panel" style={{ marginBottom: '1rem' }}>
-          <h3 style={{ margin: '0 0 0.75rem', fontFamily: 'var(--font-display)' }}>
-            {t('menuCard')}
-          </h3>
-          <img src={gathering.menuCardUrl} alt={t('menuCard')} />
-          {!gathering.menuCardUrl.startsWith('data:') && (
-            <a
-              className="btn btn-ghost btn-sm"
-              href={gathering.menuCardUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t('menuCardOpen')}
-            </a>
-          )}
-        </div>
+        <details className="collapsible-details">
+          <summary>{t('viewMenuCard')}</summary>
+          <div className="menu-card-preview">
+            <img src={gathering.menuCardUrl} alt={t('menuCard')} />
+            {!gathering.menuCardUrl.startsWith('data:') && (
+              <a
+                className="btn btn-ghost btn-sm"
+                href={gathering.menuCardUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t('menuCardOpen')}
+              </a>
+            )}
+          </div>
+        </details>
       )}
 
       {submitted && <div className="success-banner">{t('successBanner')}</div>}
 
-      <div className="layout-split">
+      <div className="layout-split rsvp-layout">
         <section className="panel">
           <h2>{t('register')}</h2>
           <p className="sub">{t('registerSub')}</p>
@@ -223,32 +261,28 @@ export function RsvpPage() {
                 {asGroup ? t('groupName') : t('guestName')}
                 <input
                   required
+                  autoComplete="name"
+                  enterKeyHint="next"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder={asGroup ? t('groupNamePlaceholder') : 'Alex'}
                 />
               </label>
-              <label className="full paid-toggle" style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <label className="full paid-toggle">
                 <input
                   type="checkbox"
                   checked={asGroup}
-                  onChange={(e) => setAsGroup(e.target.checked)}
+                  onChange={(e) => {
+                    const next = e.target.checked
+                    setAsGroup(next)
+                    if (next && members.length === 0) {
+                      setMembers([createMemberDraft(), createMemberDraft()])
+                    }
+                  }}
                 />
                 {t('registeringAsGroup')}
               </label>
-              {asGroup && (
-                <label>
-                  {t('groupSize')}
-                  <input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={groupSize}
-                    onChange={(e) => setGroupSize(Math.max(1, Number(e.target.value) || 1))}
-                  />
-                </label>
-              )}
-              <label className="full paid-toggle" style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <label className="full paid-toggle">
                 <input
                   type="checkbox"
                   checked={forSomeoneElse}
@@ -261,20 +295,48 @@ export function RsvpPage() {
                   {t('yourName')}
                   <input
                     required
+                    autoComplete="name"
                     value={registeredBy}
                     onChange={(e) => setRegisteredBy(e.target.value)}
                     placeholder={t('placeholderRegistrar')}
                   />
                 </label>
               )}
-              <label className="full">
-                {t('allergiesDietary')}
+              <label>
+                {t('emailOptional')}
                 <input
-                  value={allergies}
-                  onChange={(e) => setAllergies(e.target.value)}
-                  placeholder={t('placeholderAllergies')}
+                  type="email"
+                  autoComplete="email"
+                  inputMode="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={t('placeholderEmail')}
                 />
               </label>
+              <label>
+                {t('phoneOptional')}
+                <input
+                  type="tel"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder={t('placeholderPhone')}
+                />
+              </label>
+              {!asGroup && (
+                <>
+                  <label className="full">
+                    {t('allergiesDietary')}
+                    <input
+                      value={allergies}
+                      onChange={(e) => setAllergies(e.target.value)}
+                      placeholder={t('placeholderAllergies')}
+                      enterKeyHint="next"
+                    />
+                  </label>
+                </>
+              )}
               <label className="full">
                 {t('notes')}
                 <textarea
@@ -285,73 +347,117 @@ export function RsvpPage() {
               </label>
             </div>
 
-            <h3 style={{ margin: '1.25rem 0 0.35rem', fontFamily: 'var(--font-display)' }}>
-              {t('pickFromMenu')}
-            </h3>
-            <p className="sub">{t('pickMenuOrAlaCarte')}</p>
-            {gathering.menu.length === 0 ? (
-              <div className="empty">{t('organizerNoMenu')}</div>
-            ) : (
-              <div className="menu-picker">
-                {gathering.menu.map((item) => {
-                  const selected = menuItemIds.includes(item.id)
-                  return (
-                    <label
-                      key={item.id}
-                      className={`menu-option ${selected ? 'selected' : ''}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => toggleItem(item.id)}
-                      />
-                      <span>
-                        <strong>{item.name}</strong>
-                        {item.isAlaCarte && (
-                          <>
-                            {' '}
-                            <span className="chip chip-warm">{t('alaCarte')}</span>
-                          </>
+            {asGroup ? (
+              <>
+                <h3 style={{ margin: '1.25rem 0 0.35rem', fontFamily: 'var(--font-display)' }}>
+                  {t('groupMembersTitle')}
+                </h3>
+                <p className="sub">{t('groupMembersSub')}</p>
+                <div className="member-list">
+                  {members.map((member, index) => (
+                    <div key={member.id} className="member-card">
+                      <div className="member-card-head">
+                        <h4>{t('memberLabel', { n: index + 1 })}</h4>
+                        {members.length > 1 && (
+                          <button
+                            type="button"
+                            className="btn btn-danger btn-sm"
+                            onClick={() =>
+                              setMembers((prev) => prev.filter((m) => m.id !== member.id))
+                            }
+                          >
+                            {t('removeMember')}
+                          </button>
                         )}
-                        <br />
-                        <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>
-                          {item.category}
-                          {item.description ? ` · ${item.description}` : ''}
-                        </span>
-                      </span>
-                      <span className="price">
-                        {item.isAlaCarte
-                          ? t('priceVariable')
-                          : formatMoney(item.price, gathering.currency, localeTag)}
-                      </span>
-                    </label>
-                  )
-                })}
-              </div>
+                      </div>
+                      <label>
+                        {t('memberName')}
+                        <input
+                          required
+                          value={member.name}
+                          onChange={(e) => updateMember(member.id, { name: e.target.value })}
+                          placeholder={t('memberNamePlaceholder')}
+                          autoComplete="name"
+                        />
+                      </label>
+                      <label>
+                        {t('allergiesDietary')}
+                        <input
+                          value={member.allergies}
+                          onChange={(e) =>
+                            updateMember(member.id, { allergies: e.target.value })
+                          }
+                          placeholder={t('placeholderAllergies')}
+                        />
+                      </label>
+                      <div>
+                        <p className="sub" style={{ marginBottom: '0.5rem' }}>
+                          {t('memberMenu')}
+                        </p>
+                        <p className="sub">{t('pickMenuOrAlaCarte')}</p>
+                        <MenuPicker
+                          menu={gathering.menu}
+                          selectedIds={member.menuItemIds}
+                          currency={gathering.currency}
+                          onToggle={(itemId) => toggleMemberMenu(member.id, itemId)}
+                          emptyLabel={t('organizerNoMenu')}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setMembers((prev) => [...prev, createMemberDraft()])}
+                >
+                  {t('addMember')}
+                </button>
+              </>
+            ) : (
+              <>
+                <h3 style={{ margin: '1.25rem 0 0.35rem', fontFamily: 'var(--font-display)' }}>
+                  {t('pickFromMenu')}
+                </h3>
+                <p className="sub">{t('pickMenuOrAlaCarte')}</p>
+                <MenuPicker
+                  menu={gathering.menu}
+                  selectedIds={menuItemIds}
+                  currency={gathering.currency}
+                  onToggle={(itemId) =>
+                    setMenuItemIds((prev) =>
+                      toggleMenuSelection(prev, itemId, gathering.menu),
+                    )
+                  }
+                  emptyLabel={t('organizerNoMenu')}
+                />
+              </>
             )}
 
-            <div className="form-actions" style={{ justifyContent: 'space-between' }}>
-              <strong>
-                {hasAlaCartePick ? t('estimatedVariable') : t('estimated')}{' '}
-                <span className="price">
-                  {formatMoney(estimated, gathering.currency, localeTag)}
-                </span>
-                {asGroup && (
-                  <span style={{ color: 'var(--muted)', fontWeight: 600, fontSize: '0.85rem' }}>
-                    {' '}
-                    · {groupSize}{' '}
-                    {groupSize === 1 ? t('personLabel') : t('peopleLabel')}
+            <div className="sticky-actions">
+              <div className="form-actions" style={{ justifyContent: 'space-between' }}>
+                <strong>
+                  {hasAlaCartePick ? t('estimatedVariable') : t('estimated')}{' '}
+                  <span className="price">
+                    {formatMoney(estimated, gathering.currency, localeTag)}
                   </span>
-                )}
-              </strong>
-              <button className="btn btn-accent" type="submit" disabled={saving}>
-                {saving ? t('saving') : t('confirmRsvp')}
-              </button>
+                  {asGroup && (
+                    <span style={{ color: 'var(--muted)', fontWeight: 600, fontSize: '0.85rem' }}>
+                      {' '}
+                      · {members.length}{' '}
+                      {members.length === 1 ? t('personLabel') : t('peopleLabel')}
+                    </span>
+                  )}
+                </strong>
+                <button className="btn btn-accent" type="submit" disabled={saving}>
+                  {saving ? t('saving') : t('confirmRsvp')}
+                </button>
+              </div>
             </div>
           </form>
         </section>
 
-        <section className="panel">
+        <section className="panel guest-list-mobile-secondary">
           <h2>
             {t('alreadyComing', {
               count: gathering.attendees.reduce((sum, a) => sum + partySize(a), 0),
@@ -365,23 +471,46 @@ export function RsvpPage() {
               {gathering.attendees.map((a) => (
                 <div key={a.id} className="guest-row">
                   <h4>{a.name}</h4>
-                  <p>
-                    {a.isGroup && (
-                      <>
-                        {t('groupBadge', { count: partySize(a) })}
-                        {' · '}
-                      </>
-                    )}
-                    {a.menuItemIds.length === 1
-                      ? t('menuPick', { count: a.menuItemIds.length })
-                      : t('menuPicks', { count: a.menuItemIds.length })}
-                    {a.allergies ? (
-                      <>
-                        {' · '}
-                        <span className="allergy">{a.allergies}</span>
-                      </>
-                    ) : null}
-                  </p>
+                  {a.isGroup && a.members?.length ? (
+                    <ul className="member-picks">
+                      {a.members.map((m) => (
+                        <li key={m.id}>
+                          <strong>{m.name}</strong>
+                          {' · '}
+                          {menuLabel(m.menuItemIds, gathering.menu, t('noSelection'))}
+                          {m.allergies ? (
+                            <>
+                              {' · '}
+                              <span className="allergy">{m.allergies}</span>
+                            </>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>
+                      {a.isGroup && (
+                        <>
+                          {t('groupBadge', { count: partySize(a) })}
+                          {' · '}
+                        </>
+                      )}
+                      {a.menuItemIds.length === 1
+                        ? t('menuPick', { count: a.menuItemIds.length })
+                        : t('menuPicks', { count: a.menuItemIds.length })}
+                      {a.allergies ? (
+                        <>
+                          {' · '}
+                          <span className="allergy">{a.allergies}</span>
+                        </>
+                      ) : null}
+                    </p>
+                  )}
+                  {a.isGroup && (
+                    <p className="sub" style={{ marginTop: '0.35rem' }}>
+                      {formatMoney(attendeeTotal(a, gathering.menu), gathering.currency, localeTag)}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
