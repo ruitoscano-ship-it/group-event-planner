@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { formatDate, formatMoney } from '../lib/money'
+import { LanguageSwitcher } from '../components/LanguageSwitcher'
+import { useI18n } from '../i18n/I18nContext'
+import {
+  attendeeUnitPrice,
+  formatDate,
+  formatMoney,
+  partySize,
+} from '../lib/money'
 import { useGatherings } from '../store/GatheringsContext'
 
 export function RsvpPage() {
   const { eventId = '' } = useParams()
+  const { t, localeTag } = useI18n()
   const { getGathering, ensureGathering, addAttendee } = useGatherings()
   const gathering = getGathering(eventId)
 
@@ -13,6 +21,8 @@ export function RsvpPage() {
   const [name, setName] = useState('')
   const [registeredBy, setRegisteredBy] = useState('')
   const [forSomeoneElse, setForSomeoneElse] = useState(false)
+  const [asGroup, setAsGroup] = useState(false)
+  const [groupSize, setGroupSize] = useState(2)
   const [menuItemIds, setMenuItemIds] = useState<string[]>([])
   const [allergies, setAllergies] = useState('')
   const [notes, setNotes] = useState('')
@@ -39,42 +49,79 @@ export function RsvpPage() {
 
   const estimated = useMemo(() => {
     if (!gathering) return 0
-    return menuItemIds.reduce((sum, id) => {
-      const item = gathering.menu.find((m) => m.id === id)
-      return sum + (item?.price ?? 0)
-    }, 0)
+    const fake = {
+      id: '',
+      name: '',
+      registeredBy: '',
+      menuItemIds,
+      allergies: '',
+      notes: '',
+      amountPaid: 0,
+      createdAt: '',
+      isGroup: asGroup,
+      groupSize: asGroup ? groupSize : 1,
+    }
+    return attendeeUnitPrice(fake, gathering.menu) * partySize(fake)
+  }, [gathering, menuItemIds, asGroup, groupSize])
+
+  const hasAlaCartePick = useMemo(() => {
+    if (!gathering) return false
+    return menuItemIds.some((id) => gathering.menu.find((m) => m.id === id)?.isAlaCarte)
   }, [gathering, menuItemIds])
 
   if (fetching) {
-    return <div className="empty">Loading RSVP…</div>
+    return <div className="empty">{t('loadingRsvp')}</div>
   }
 
   if (notFound || !gathering) {
     return (
       <>
         <header className="topbar">
-          <Link to="/" className="brand">
+          <Link viewTransition to="/" className="brand">
             <i className="brand-mark" aria-hidden />
             Round<span>.</span>
           </Link>
+          <LanguageSwitcher />
         </header>
         <div className="panel">
-          <h2>Gathering not found</h2>
-          <p className="sub">
-            This RSVP link doesn’t match a live event. Ask the organizer to resend the link.
-          </p>
-          <Link className="btn btn-accent" to="/">
-            Go home
+          <h2>{t('gatheringNotFound')}</h2>
+          <p className="sub">{t('rsvpNotFoundSub')}</p>
+          <Link viewTransition className="btn btn-accent" to="/">
+            {t('goHome')}
           </Link>
         </div>
       </>
     )
   }
 
+  const typeLabel =
+    gathering.type === 'lunch'
+      ? t('typeLunch')
+      : gathering.type === 'dinner'
+        ? t('typeDinner')
+        : gathering.type === 'brunch'
+          ? t('typeBrunch')
+          : t('typeOther')
+
   function toggleItem(id: string) {
-    setMenuItemIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    )
+    if (!gathering) return
+    const item = gathering.menu.find((m) => m.id === id)
+    if (!item) return
+
+    setMenuItemIds((prev) => {
+      const selected = prev.includes(id)
+      if (selected) return prev.filter((x) => x !== id)
+
+      if (item.isAlaCarte) {
+        // À la carte is exclusive vs fixed menus
+        return [id]
+      }
+      // Fixed menus clear any à la carte pick
+      const withoutAla = prev.filter(
+        (x) => !gathering.menu.find((m) => m.id === x)?.isAlaCarte,
+      )
+      return [...withoutAla, id]
+    })
   }
 
   async function onSubmit(e: FormEvent) {
@@ -93,16 +140,20 @@ export function RsvpPage() {
         menuItemIds,
         allergies: allergies.trim(),
         notes: notes.trim(),
+        isGroup: asGroup,
+        groupSize: asGroup ? Math.max(1, groupSize) : 1,
       })
       setSubmitted(true)
       setName('')
       setRegisteredBy('')
       setForSomeoneElse(false)
+      setAsGroup(false)
+      setGroupSize(2)
       setMenuItemIds([])
       setAllergies('')
       setNotes('')
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'Could not save RSVP')
+      setSubmitError(err instanceof Error ? err.message : t('rsvpSaveFailed'))
     } finally {
       setSaving(false)
     }
@@ -111,94 +162,135 @@ export function RsvpPage() {
   return (
     <>
       <header className="topbar">
-        <Link to="/" className="brand">
+        <Link viewTransition to="/" className="brand">
           <i className="brand-mark" aria-hidden />
           Round<span>.</span>
         </Link>
-        <Link className="btn btn-ghost btn-sm" to={`/events/${gathering.id}`}>
-          Organizer view
-        </Link>
+        <div className="nav-actions">
+          <LanguageSwitcher />
+          <Link viewTransition className="btn btn-ghost btn-sm" to={`/events/${gathering.id}`}>
+            {t('organizerView')}
+          </Link>
+        </div>
       </header>
 
       <div className="page-header">
         <div>
           <div className="meta" style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.6rem' }}>
-            <span className="chip">{gathering.type}</span>
-            <span className="chip chip-warm">{formatDate(gathering.date)}</span>
+            <span className="chip">{typeLabel}</span>
+            <span className="chip chip-warm">
+              {formatDate(gathering.date, localeTag, t('dateTbd'))}
+            </span>
             {gathering.time && <span className="chip chip-muted">{gathering.time}</span>}
           </div>
-          <h1>RSVP · {gathering.title}</h1>
+          <h1>{t('rsvpTitle', { title: gathering.title })}</h1>
           <p className="lede">
-            {gathering.location || 'Location TBD'}
+            {gathering.location || t('locationTbd')}
             {gathering.notes ? ` — ${gathering.notes}` : ''}
           </p>
         </div>
       </div>
 
-      {submitted && (
-        <div className="success-banner">
-          You’re on the list. Add another guest below if you’re signing up for someone else too.
+      {gathering.menuCardUrl && (
+        <div className="menu-card-preview panel" style={{ marginBottom: '1rem' }}>
+          <h3 style={{ margin: '0 0 0.75rem', fontFamily: 'var(--font-display)' }}>
+            {t('menuCard')}
+          </h3>
+          <img src={gathering.menuCardUrl} alt={t('menuCard')} />
+          {!gathering.menuCardUrl.startsWith('data:') && (
+            <a
+              className="btn btn-ghost btn-sm"
+              href={gathering.menuCardUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t('menuCardOpen')}
+            </a>
+          )}
         </div>
       )}
 
+      {submitted && <div className="success-banner">{t('successBanner')}</div>}
+
       <div className="layout-split">
         <section className="panel">
-          <h2>Register</h2>
-          <p className="sub">Sign yourself up — or add a friend who can’t fill this in.</p>
+          <h2>{t('register')}</h2>
+          <p className="sub">{t('registerSub')}</p>
           {submitError && <p className="allergy">{submitError}</p>}
           <form onSubmit={(e) => void onSubmit(e)}>
             <div className="form-grid">
               <label className="full">
-                Guest name
+                {asGroup ? t('groupName') : t('guestName')}
                 <input
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Alex"
+                  placeholder={asGroup ? t('groupNamePlaceholder') : 'Alex'}
                 />
               </label>
+              <label className="full paid-toggle" style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={asGroup}
+                  onChange={(e) => setAsGroup(e.target.checked)}
+                />
+                {t('registeringAsGroup')}
+              </label>
+              {asGroup && (
+                <label>
+                  {t('groupSize')}
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={groupSize}
+                    onChange={(e) => setGroupSize(Math.max(1, Number(e.target.value) || 1))}
+                  />
+                </label>
+              )}
               <label className="full paid-toggle" style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <input
                   type="checkbox"
                   checked={forSomeoneElse}
                   onChange={(e) => setForSomeoneElse(e.target.checked)}
                 />
-                I’m registering someone else
+                {t('registeringSomeoneElse')}
               </label>
               {forSomeoneElse && (
                 <label className="full">
-                  Your name
+                  {t('yourName')}
                   <input
                     required
                     value={registeredBy}
                     onChange={(e) => setRegisteredBy(e.target.value)}
-                    placeholder="Who is filling this in?"
+                    placeholder={t('placeholderRegistrar')}
                   />
                 </label>
               )}
               <label className="full">
-                Allergies / dietary needs
+                {t('allergiesDietary')}
                 <input
                   value={allergies}
                   onChange={(e) => setAllergies(e.target.value)}
-                  placeholder="Nuts, gluten-free, vegetarian…"
+                  placeholder={t('placeholderAllergies')}
                 />
               </label>
               <label className="full">
-                Notes
+                {t('notes')}
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Extra sauce, arriving late…"
+                  placeholder={t('placeholderGuestNotes')}
                 />
               </label>
             </div>
 
-            <h3 style={{ margin: '1.25rem 0 0.65rem', fontFamily: 'var(--font-display)' }}>
-              Pick from the menu
+            <h3 style={{ margin: '1.25rem 0 0.35rem', fontFamily: 'var(--font-display)' }}>
+              {t('pickFromMenu')}
             </h3>
+            <p className="sub">{t('pickMenuOrAlaCarte')}</p>
             {gathering.menu.length === 0 ? (
-              <div className="empty">The organizer hasn’t added menu options yet.</div>
+              <div className="empty">{t('organizerNoMenu')}</div>
             ) : (
               <div className="menu-picker">
                 {gathering.menu.map((item) => {
@@ -215,6 +307,12 @@ export function RsvpPage() {
                       />
                       <span>
                         <strong>{item.name}</strong>
+                        {item.isAlaCarte && (
+                          <>
+                            {' '}
+                            <span className="chip chip-warm">{t('alaCarte')}</span>
+                          </>
+                        )}
                         <br />
                         <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>
                           {item.category}
@@ -222,7 +320,9 @@ export function RsvpPage() {
                         </span>
                       </span>
                       <span className="price">
-                        {formatMoney(item.price, gathering.currency)}
+                        {item.isAlaCarte
+                          ? t('priceVariable')
+                          : formatMoney(item.price, gathering.currency, localeTag)}
                       </span>
                     </label>
                   )
@@ -232,29 +332,49 @@ export function RsvpPage() {
 
             <div className="form-actions" style={{ justifyContent: 'space-between' }}>
               <strong>
-                Estimated:{' '}
-                <span className="price">{formatMoney(estimated, gathering.currency)}</span>
+                {hasAlaCartePick ? t('estimatedVariable') : t('estimated')}{' '}
+                <span className="price">
+                  {formatMoney(estimated, gathering.currency, localeTag)}
+                </span>
+                {asGroup && (
+                  <span style={{ color: 'var(--muted)', fontWeight: 600, fontSize: '0.85rem' }}>
+                    {' '}
+                    · {groupSize}{' '}
+                    {groupSize === 1 ? t('personLabel') : t('peopleLabel')}
+                  </span>
+                )}
               </strong>
               <button className="btn btn-accent" type="submit" disabled={saving}>
-                {saving ? 'Saving…' : 'Confirm RSVP'}
+                {saving ? t('saving') : t('confirmRsvp')}
               </button>
             </div>
           </form>
         </section>
 
         <section className="panel">
-          <h2>Already coming ({gathering.attendees.length})</h2>
-          <p className="sub">Live list of who’s registered so far.</p>
+          <h2>
+            {t('alreadyComing', {
+              count: gathering.attendees.reduce((sum, a) => sum + partySize(a), 0),
+            })}
+          </h2>
+          <p className="sub">{t('alreadyComingSub')}</p>
           {gathering.attendees.length === 0 ? (
-            <div className="empty">Be the first to RSVP.</div>
+            <div className="empty">{t('beFirst')}</div>
           ) : (
             <div className="guest-list">
               {gathering.attendees.map((a) => (
                 <div key={a.id} className="guest-row">
                   <h4>{a.name}</h4>
                   <p>
-                    {a.menuItemIds.length} menu pick
-                    {a.menuItemIds.length === 1 ? '' : 's'}
+                    {a.isGroup && (
+                      <>
+                        {t('groupBadge', { count: partySize(a) })}
+                        {' · '}
+                      </>
+                    )}
+                    {a.menuItemIds.length === 1
+                      ? t('menuPick', { count: a.menuItemIds.length })
+                      : t('menuPicks', { count: a.menuItemIds.length })}
                     {a.allergies ? (
                       <>
                         {' · '}

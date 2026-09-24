@@ -54,6 +54,12 @@ export const api = {
       { method: 'POST', body: JSON.stringify(item) },
     )
   },
+  setMenuCard(gatheringId: string, menuCardUrl: string) {
+    return request<Gathering>(
+      `/api/gatherings/${encodeURIComponent(gatheringId)}/menu-card`,
+      { method: 'PUT', body: JSON.stringify({ menuCardUrl }) },
+    )
+  },
   removeMenuItem(gatheringId: string, itemId: string) {
     return request<Gathering>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/menu/${encodeURIComponent(itemId)}`,

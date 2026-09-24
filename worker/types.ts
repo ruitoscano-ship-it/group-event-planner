@@ -4,6 +4,7 @@ export type MenuItem = {
   description: string
   price: number
   category: string
+  isAlaCarte: boolean
 }
 
 export type Attendee = {
@@ -15,6 +16,8 @@ export type Attendee = {
   notes: string
   amountPaid: number
   createdAt: string
+  isGroup: boolean
+  groupSize: number
 }
 
 export type Gathering = {
@@ -26,6 +29,7 @@ export type Gathering = {
   location: string
   notes: string
   currency: string
+  menuCardUrl: string
   menu: MenuItem[]
   attendees: Attendee[]
   createdAt: string
@@ -39,6 +43,7 @@ export type GatheringInput = {
   location: string
   notes: string
   currency: string
+  menuCardUrl?: string
 }
 
 export type Env = {

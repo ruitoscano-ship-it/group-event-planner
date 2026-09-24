@@ -26,6 +26,7 @@ type Store = {
   updateGathering: (id: string, patch: Partial<Gathering>) => Promise<void>
   deleteGathering: (id: string) => Promise<void>
   addMenuItem: (gatheringId: string, item: Omit<MenuItem, 'id'>) => Promise<void>
+  setMenuCard: (gatheringId: string, menuCardUrl: string) => Promise<void>
   removeMenuItem: (gatheringId: string, itemId: string) => Promise<void>
   addAttendee: (
     gatheringId: string,
@@ -119,6 +120,11 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  const setMenuCard = useCallback(async (gatheringId: string, menuCardUrl: string) => {
+    const next = await api.setMenuCard(gatheringId, menuCardUrl)
+    setGatherings((prev) => upsert(prev, next))
+  }, [])
+
   const removeMenuItem = useCallback(async (gatheringId: string, itemId: string) => {
     const next = await api.removeMenuItem(gatheringId, itemId)
     setGatherings((prev) => upsert(prev, next))
@@ -166,6 +172,7 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       updateGathering,
       deleteGathering,
       addMenuItem,
+      setMenuCard,
       removeMenuItem,
       addAttendee,
       updateAttendee,
@@ -182,6 +189,7 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       updateGathering,
       deleteGathering,
       addMenuItem,
+      setMenuCard,
       removeMenuItem,
       addAttendee,
       updateAttendee,

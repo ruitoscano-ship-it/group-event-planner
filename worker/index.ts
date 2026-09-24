@@ -18,6 +18,23 @@ function newId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().slice(0, 8)}`
 }
 
+function normalizeGathering(raw: Gathering): Gathering {
+  return {
+    ...raw,
+    menuCardUrl: raw.menuCardUrl || '',
+    menu: (raw.menu || []).map((m) => ({
+      ...m,
+      isAlaCarte: Boolean(m.isAlaCarte),
+      price: m.isAlaCarte ? 0 : Number(m.price) || 0,
+    })),
+    attendees: (raw.attendees || []).map((a) => ({
+      ...a,
+      isGroup: Boolean(a.isGroup),
+      groupSize: a.isGroup ? Math.max(1, Number(a.groupSize) || 1) : 1,
+    })),
+  }
+}
+
 async function readGathering(db: D1Database, id: string): Promise<Gathering | null> {
   const row = await db
     .prepare('SELECT data FROM gatherings WHERE id = ?')
@@ -25,7 +42,7 @@ async function readGathering(db: D1Database, id: string): Promise<Gathering | nu
     .first<{ data: string }>()
   if (!row) return null
   try {
-    return JSON.parse(row.data) as Gathering
+    return normalizeGathering(JSON.parse(row.data) as Gathering)
   } catch {
     return null
   }
@@ -33,18 +50,19 @@ async function readGathering(db: D1Database, id: string): Promise<Gathering | nu
 
 async function writeGathering(db: D1Database, gathering: Gathering, isNew: boolean) {
   const now = new Date().toISOString()
-  const payload = JSON.stringify(gathering)
+  const normalized = normalizeGathering(gathering)
+  const payload = JSON.stringify(normalized)
   if (isNew) {
     await db
       .prepare(
         'INSERT INTO gatherings (id, data, created_at, updated_at) VALUES (?, ?, ?, ?)',
       )
-      .bind(gathering.id, payload, gathering.createdAt || now, now)
+      .bind(normalized.id, payload, normalized.createdAt || now, now)
       .run()
   } else {
     await db
       .prepare('UPDATE gatherings SET data = ?, updated_at = ? WHERE id = ?')
-      .bind(payload, now, gathering.id)
+      .bind(payload, now, normalized.id)
       .run()
   }
 }
@@ -93,7 +111,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const gatherings = (results ?? [])
       .map((row) => {
         try {
-          return JSON.parse(row.data) as Gathering
+          return normalizeGathering(JSON.parse(row.data) as Gathering)
         } catch {
           return null
         }
@@ -117,6 +135,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       location: (body.location || '').trim(),
       notes: (body.notes || '').trim(),
       currency: body.currency || 'EUR',
+      menuCardUrl: (body.menuCardUrl || '').trim(),
       menu: [],
       attendees: [],
       createdAt: now,
@@ -144,6 +163,8 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
         ...existing,
         ...body,
         id,
+        menuCardUrl:
+          typeof body.menuCardUrl === 'string' ? body.menuCardUrl.trim() : existing.menuCardUrl,
         menu: Array.isArray(body.menu) ? body.menu : existing.menu,
         attendees: Array.isArray(body.attendees) ? body.attendees : existing.attendees,
         createdAt: existing.createdAt,
@@ -161,6 +182,21 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     }
   }
 
+  const menuCardMatch = path.match(/^\/api\/gatherings\/([^/]+)\/menu-card$/)
+  if (menuCardMatch && method === 'PUT') {
+    const id = decodeURIComponent(menuCardMatch[1])
+    const gathering = await readGathering(env.DB, id)
+    if (!gathering) return error('Gathering not found', 404)
+    const body = (await request.json()) as { menuCardUrl?: string }
+    const urlValue = (body.menuCardUrl || '').trim()
+    if (urlValue.startsWith('data:') && urlValue.length > 700_000) {
+      return error('Image is too large. Use a smaller file or a link.', 413)
+    }
+    gathering.menuCardUrl = urlValue
+    await writeGathering(env.DB, gathering, false)
+    return json(gathering)
+  }
+
   const menuMatch = path.match(/^\/api\/gatherings\/([^/]+)\/menu$/)
   if (menuMatch && method === 'POST') {
     const id = decodeURIComponent(menuMatch[1])
@@ -168,12 +204,14 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (!gathering) return error('Gathering not found', 404)
     const body = (await request.json()) as Omit<MenuItem, 'id'>
     if (!body?.name?.trim()) return error('Menu item name is required')
+    const isAlaCarte = Boolean(body.isAlaCarte)
     const item: MenuItem = {
       id: newId('menu'),
       name: body.name.trim(),
       description: (body.description || '').trim(),
-      price: Number(body.price) || 0,
+      price: isAlaCarte ? 0 : Number(body.price) || 0,
       category: (body.category || 'Mains').trim() || 'Mains',
+      isAlaCarte,
     }
     gathering.menu.push(item)
     await writeGathering(env.DB, gathering, false)
@@ -204,6 +242,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       amountPaid?: number
     }
     if (!body?.name?.trim()) return error('Guest name is required')
+    const isGroup = Boolean(body.isGroup)
     const attendee: Attendee = {
       id: newId('guest'),
       name: body.name.trim(),
@@ -213,6 +252,8 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       notes: (body.notes || '').trim(),
       amountPaid: Number(body.amountPaid) || 0,
       createdAt: new Date().toISOString(),
+      isGroup,
+      groupSize: isGroup ? Math.max(1, Number(body.groupSize) || 1) : 1,
     }
     gathering.attendees.push(attendee)
     await writeGathering(env.DB, gathering, false)
@@ -230,7 +271,19 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       const body = (await request.json()) as Partial<Attendee>
       const idx = gathering.attendees.findIndex((a) => a.id === attendeeId)
       if (idx === -1) return error('Attendee not found', 404)
-      gathering.attendees[idx] = { ...gathering.attendees[idx], ...body, id: attendeeId }
+      gathering.attendees[idx] = {
+        ...gathering.attendees[idx],
+        ...body,
+        id: attendeeId,
+        isGroup:
+          body.isGroup !== undefined
+            ? Boolean(body.isGroup)
+            : gathering.attendees[idx].isGroup,
+        groupSize:
+          body.groupSize !== undefined
+            ? Math.max(1, Number(body.groupSize) || 1)
+            : gathering.attendees[idx].groupSize,
+      }
       await writeGathering(env.DB, gathering, false)
       return json(gathering)
     }

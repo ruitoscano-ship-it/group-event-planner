@@ -4,6 +4,8 @@ export type MenuItem = {
   description: string
   price: number
   category: string
+  /** When true, price is variable / TBD — not used for billing totals. */
+  isAlaCarte: boolean
 }
 
 export type Attendee = {
@@ -15,6 +17,9 @@ export type Attendee = {
   notes: string
   amountPaid: number
   createdAt: string
+  /** Family / group registration */
+  isGroup: boolean
+  groupSize: number
 }
 
 export type Gathering = {
@@ -26,9 +31,16 @@ export type Gathering = {
   location: string
   notes: string
   currency: string
+  /** Uploaded image path or external URL to the printed menu / carte */
+  menuCardUrl: string
   menu: MenuItem[]
   attendees: Attendee[]
   createdAt: string
 }
 
-export type GatheringInput = Omit<Gathering, 'id' | 'menu' | 'attendees' | 'createdAt'>
+export type GatheringInput = Omit<
+  Gathering,
+  'id' | 'menu' | 'attendees' | 'createdAt' | 'menuCardUrl'
+> & {
+  menuCardUrl?: string
+}

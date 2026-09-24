@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { LanguageSwitcher } from '../components/LanguageSwitcher'
+import { useI18n } from '../i18n/I18nContext'
 import { formatDate, formatMoney, gatheringTotals } from '../lib/money'
 import { useGatherings } from '../store/GatheringsContext'
 import type { GatheringInput } from '../types'
@@ -16,6 +18,7 @@ const emptyForm: GatheringInput = {
 
 export function HomePage() {
   const { gatherings, createGathering, loading, error, refresh } = useGatherings()
+  const { t, localeTag } = useI18n()
   const navigate = useNavigate()
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<GatheringInput>(emptyForm)
@@ -36,9 +39,9 @@ export function HomePage() {
       })
       setForm(emptyForm)
       setShowForm(false)
-      navigate(`/events/${created.id}`)
+      navigate(`/events/${created.id}`, { viewTransition: true })
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Could not create gathering')
+      setFormError(err instanceof Error ? err.message : t('createFailed'))
     } finally {
       setSaving(false)
     }
@@ -47,13 +50,14 @@ export function HomePage() {
   return (
     <>
       <header className="topbar">
-        <Link to="/" className="brand">
+        <Link viewTransition to="/" className="brand">
           <i className="brand-mark" aria-hidden />
           Round<span>.</span>
         </Link>
         <div className="nav-actions">
+          <LanguageSwitcher />
           <button className="btn btn-accent" type="button" onClick={() => setShowForm(true)}>
-            New gathering
+            {t('newGathering')}
           </button>
         </div>
       </header>
@@ -63,52 +67,49 @@ export function HomePage() {
           <p className="brand">
             Round<span>.</span>
           </p>
-          <p className="hero-lede">
-            Plan lunches and dinners with friends — set the menu, let everyone RSVP
-            themselves, track allergies, and see who still owes.
-          </p>
+          <p className="hero-lede">{t('heroLede')}</p>
           <div className="nav-actions">
             <button className="btn btn-accent" type="button" onClick={() => setShowForm(true)}>
-              Create an event
+              {t('createEvent')}
             </button>
             {gatherings.length > 0 && (
               <a className="btn btn-ghost" href="#upcoming">
-                View gatherings
+                {t('viewGatherings')}
               </a>
             )}
           </div>
         </div>
-        <div className="hero-visual" role="img" aria-label="Friends gathered around a table" />
+        <div className="hero-visual" role="img" aria-label={t('brandAria')} />
       </section>
 
       {error && (
         <div className="panel" style={{ marginBottom: '1rem' }}>
-          <h3>Couldn’t sync</h3>
+          <h3>{t('syncErrorTitle')}</h3>
           <p className="sub">{error}</p>
           <button className="btn btn-accent btn-sm" type="button" onClick={() => void refresh()}>
-            Retry
+            {t('retry')}
           </button>
         </div>
       )}
 
       {showForm && (
         <section className="section panel">
-          <h2>Create gathering</h2>
-          <p className="sub">Add the basics first — you can upload the menu next.</p>
+          <h2>{t('createGathering')}</h2>
+          <p className="sub">{t('createGatheringSub')}</p>
           {formError && <p className="allergy">{formError}</p>}
           <form onSubmit={(e) => void onSubmit(e)}>
             <div className="form-grid">
               <label className="full">
-                Title
+                {t('title')}
                 <input
                   required
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  placeholder="Friday team lunch"
+                  placeholder={t('placeholderTitle')}
                 />
               </label>
               <label>
-                Type
+                {t('type')}
                 <select
                   value={form.type}
                   onChange={(e) =>
@@ -118,14 +119,14 @@ export function HomePage() {
                     })
                   }
                 >
-                  <option value="lunch">Lunch</option>
-                  <option value="dinner">Dinner</option>
-                  <option value="brunch">Brunch</option>
-                  <option value="other">Other</option>
+                  <option value="lunch">{t('typeLunch')}</option>
+                  <option value="dinner">{t('typeDinner')}</option>
+                  <option value="brunch">{t('typeBrunch')}</option>
+                  <option value="other">{t('typeOther')}</option>
                 </select>
               </label>
               <label>
-                Currency
+                {t('currency')}
                 <select
                   value={form.currency}
                   onChange={(e) => setForm({ ...form, currency: e.target.value })}
@@ -137,7 +138,7 @@ export function HomePage() {
                 </select>
               </label>
               <label>
-                Date
+                {t('date')}
                 <input
                   type="date"
                   value={form.date}
@@ -145,7 +146,7 @@ export function HomePage() {
                 />
               </label>
               <label>
-                Time
+                {t('time')}
                 <input
                   type="time"
                   value={form.time}
@@ -153,32 +154,32 @@ export function HomePage() {
                 />
               </label>
               <label className="full">
-                Location
+                {t('location')}
                 <input
                   value={form.location}
                   onChange={(e) => setForm({ ...form, location: e.target.value })}
-                  placeholder="Office kitchen / Café Central"
+                  placeholder={t('placeholderLocation')}
                 />
               </label>
               <label className="full">
-                Notes
+                {t('notes')}
                 <textarea
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  placeholder="Bring cash, or pay via Revolut…"
+                  placeholder={t('placeholderNotes')}
                 />
               </label>
             </div>
             <div className="form-actions">
               <button className="btn btn-accent" type="submit" disabled={saving}>
-                {saving ? 'Saving…' : 'Save & add menu'}
+                {saving ? t('saving') : t('saveAndAddMenu')}
               </button>
               <button
                 className="btn btn-ghost"
                 type="button"
                 onClick={() => setShowForm(false)}
               >
-                Cancel
+                {t('cancel')}
               </button>
             </div>
           </form>
@@ -188,45 +189,57 @@ export function HomePage() {
       <section className="section" id="upcoming">
         <div className="section-head">
           <div>
-            <h2>Your gatherings</h2>
-            <p>Menus, RSVPs, allergies, and payments — synced for your whole group.</p>
+            <h2>{t('yourGatherings')}</h2>
+            <p>{t('yourGatheringsSub')}</p>
           </div>
         </div>
 
         {loading ? (
-          <div className="empty">Loading gatherings…</div>
+          <div className="empty">{t('loadingGatherings')}</div>
         ) : gatherings.length === 0 ? (
-          <div className="empty">
-            No gatherings yet. Create one and share the RSVP link with your group.
-          </div>
+          <div className="empty">{t('noGatherings')}</div>
         ) : (
           <div className="event-grid">
             {gatherings.map((g) => {
               const totals = gatheringTotals(g)
+              const typeLabel =
+                g.type === 'lunch'
+                  ? t('typeLunch')
+                  : g.type === 'dinner'
+                    ? t('typeDinner')
+                    : g.type === 'brunch'
+                      ? t('typeBrunch')
+                      : t('typeOther')
               return (
-                <Link key={g.id} to={`/events/${g.id}`} className="event-tile">
+                <Link viewTransition key={g.id} to={`/events/${g.id}`} className="event-tile">
                   <div className="meta">
-                    <span className="chip">{g.type}</span>
-                    <span className="chip chip-warm">{formatDate(g.date)}</span>
+                    <span className="chip">{typeLabel}</span>
+                    <span className="chip chip-warm">
+                      {formatDate(g.date, localeTag, t('dateTbd'))}
+                    </span>
                     {g.time && <span className="chip chip-muted">{g.time}</span>}
                   </div>
                   <h3>{g.title}</h3>
                   <p className="detail">
-                    {g.location || 'Location TBD'}
-                    {g.menu.length > 0 ? ` · ${g.menu.length} menu items` : ' · Menu empty'}
+                    {g.location || t('locationTbd')}
+                    {g.menu.length > 0
+                      ? ` · ${t('menuItems', { count: g.menu.length })}`
+                      : ` · ${t('menuEmpty')}`}
                   </p>
                   <div className="stats">
                     <div className="stat">
                       <strong>{totals.guestCount}</strong>
-                      <span>Guests</span>
+                      <span>{t('guests')}</span>
                     </div>
                     <div className="stat">
-                      <strong>{formatMoney(totals.owed, g.currency)}</strong>
-                      <span>Total</span>
+                      <strong>{formatMoney(totals.owed, g.currency, localeTag)}</strong>
+                      <span>{t('total')}</span>
                     </div>
                     <div className="stat">
-                      <strong>{formatMoney(totals.outstanding, g.currency)}</strong>
-                      <span>Due</span>
+                      <strong>
+                        {formatMoney(totals.outstanding, g.currency, localeTag)}
+                      </strong>
+                      <span>{t('due')}</span>
                     </div>
                   </div>
                 </Link>
