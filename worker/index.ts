@@ -1,4 +1,12 @@
-import type { Attendee, Env, Gathering, GatheringInput, MenuItem } from './types'
+import type {
+  Attendee,
+  Env,
+  Gathering,
+  GatheringInput,
+  InboxMessage,
+  MenuItem,
+  MessageInput,
+} from './types'
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -22,6 +30,9 @@ function normalizeGathering(raw: Gathering): Gathering {
   return {
     ...raw,
     menuCardUrl: raw.menuCardUrl || '',
+    organizerName: (raw.organizerName || '').trim(),
+    organizerEmail: (raw.organizerEmail || '').trim(),
+    organizerPhone: (raw.organizerPhone || '').trim(),
     menu: (raw.menu || []).map((m) => ({
       ...m,
       isAlaCarte: Boolean(m.isAlaCarte),
@@ -34,6 +45,7 @@ function normalizeGathering(raw: Gathering): Gathering {
             name: (m.name || '').trim(),
             menuItemIds: Array.isArray(m.menuItemIds) ? m.menuItemIds : [],
             allergies: (m.allergies || '').trim(),
+            menuRequest: (m.menuRequest || '').trim(),
           }))
         : []
       const isGroup = Boolean(a.isGroup)
@@ -41,6 +53,7 @@ function normalizeGathering(raw: Gathering): Gathering {
         ...a,
         email: (a.email || '').trim(),
         phone: (a.phone || '').trim(),
+        menuRequest: (a.menuRequest || '').trim(),
         isGroup,
         members,
         groupSize: isGroup
@@ -48,6 +61,17 @@ function normalizeGathering(raw: Gathering): Gathering {
           : 1,
       }
     }),
+    messages: Array.isArray(raw.messages)
+      ? raw.messages.map((m) => ({
+          id: m.id || newId('msg'),
+          fromName: (m.fromName || '').trim(),
+          fromEmail: (m.fromEmail || '').trim(),
+          fromPhone: (m.fromPhone || '').trim(),
+          body: (m.body || '').trim(),
+          createdAt: m.createdAt || new Date().toISOString(),
+          read: Boolean(m.read),
+        }))
+      : [],
   }
 }
 
@@ -151,9 +175,13 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       location: (body.location || '').trim(),
       notes: (body.notes || '').trim(),
       currency: body.currency || 'EUR',
+      organizerName: (body.organizerName || '').trim(),
+      organizerEmail: (body.organizerEmail || '').trim(),
+      organizerPhone: (body.organizerPhone || '').trim(),
       menuCardUrl: (body.menuCardUrl || '').trim(),
       menu: [],
       attendees: [],
+      messages: [],
       createdAt: now,
     }
     await writeGathering(env.DB, gathering, true)
@@ -179,10 +207,23 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
         ...existing,
         ...body,
         id,
+        organizerName:
+          typeof body.organizerName === 'string'
+            ? body.organizerName.trim()
+            : existing.organizerName,
+        organizerEmail:
+          typeof body.organizerEmail === 'string'
+            ? body.organizerEmail.trim()
+            : existing.organizerEmail,
+        organizerPhone:
+          typeof body.organizerPhone === 'string'
+            ? body.organizerPhone.trim()
+            : existing.organizerPhone,
         menuCardUrl:
           typeof body.menuCardUrl === 'string' ? body.menuCardUrl.trim() : existing.menuCardUrl,
         menu: Array.isArray(body.menu) ? body.menu : existing.menu,
         attendees: Array.isArray(body.attendees) ? body.attendees : existing.attendees,
+        messages: Array.isArray(body.messages) ? body.messages : existing.messages,
         createdAt: existing.createdAt,
       }
       await writeGathering(env.DB, next, false)
@@ -244,6 +285,10 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     gathering.attendees = gathering.attendees.map((a) => ({
       ...a,
       menuItemIds: a.menuItemIds.filter((mid) => mid !== itemId),
+      members: (a.members || []).map((m) => ({
+        ...m,
+        menuItemIds: m.menuItemIds.filter((mid) => mid !== itemId),
+      })),
     }))
     await writeGathering(env.DB, gathering, false)
     return json(gathering)
@@ -265,6 +310,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
           name: (m.name || '').trim(),
           menuItemIds: Array.isArray(m.menuItemIds) ? m.menuItemIds : [],
           allergies: (m.allergies || '').trim(),
+          menuRequest: (m.menuRequest || '').trim(),
         }))
       : []
     if (isGroup && members.length === 0) {
@@ -283,6 +329,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
           : [],
       allergies: (body.allergies || '').trim(),
       notes: (body.notes || '').trim(),
+      menuRequest: isGroup ? '' : (body.menuRequest || '').trim(),
       amountPaid: Number(body.amountPaid) || 0,
       createdAt: new Date().toISOString(),
       isGroup,
@@ -314,6 +361,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
                 name: (m.name || '').trim(),
                 menuItemIds: Array.isArray(m.menuItemIds) ? m.menuItemIds : [],
                 allergies: (m.allergies || '').trim(),
+                menuRequest: (m.menuRequest || '').trim(),
               }))
             : []
           : current.members || []
@@ -323,6 +371,14 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
         ...current,
         ...body,
         id: attendeeId,
+        email:
+          body.email !== undefined ? String(body.email).trim() : current.email,
+        phone:
+          body.phone !== undefined ? String(body.phone).trim() : current.phone,
+        menuRequest:
+          body.menuRequest !== undefined
+            ? String(body.menuRequest).trim()
+            : current.menuRequest || '',
         isGroup,
         members: isGroup ? members : [],
         groupSize: isGroup ? Math.max(1, members.length || Number(body.groupSize) || 1) : 1,
@@ -333,6 +389,54 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 
     if (method === 'DELETE') {
       gathering.attendees = gathering.attendees.filter((a) => a.id !== attendeeId)
+      await writeGathering(env.DB, gathering, false)
+      return json(gathering)
+    }
+  }
+
+  const messagesMatch = path.match(/^\/api\/gatherings\/([^/]+)\/messages$/)
+  if (messagesMatch && method === 'POST') {
+    const id = decodeURIComponent(messagesMatch[1])
+    const gathering = await readGathering(env.DB, id)
+    if (!gathering) return error('Gathering not found', 404)
+    const body = (await request.json()) as MessageInput
+    if (!body?.fromName?.trim()) return error('Your name is required')
+    if (!body?.body?.trim()) return error('Message is required')
+    const message: InboxMessage = {
+      id: newId('msg'),
+      fromName: body.fromName.trim(),
+      fromEmail: (body.fromEmail || '').trim(),
+      fromPhone: (body.fromPhone || '').trim(),
+      body: body.body.trim().slice(0, 2000),
+      createdAt: new Date().toISOString(),
+      read: false,
+    }
+    gathering.messages = [message, ...(gathering.messages || [])]
+    await writeGathering(env.DB, gathering, false)
+    return json(gathering, 201)
+  }
+
+  const messageMatch = path.match(/^\/api\/gatherings\/([^/]+)\/messages\/([^/]+)$/)
+  if (messageMatch) {
+    const id = decodeURIComponent(messageMatch[1])
+    const messageId = decodeURIComponent(messageMatch[2])
+    const gathering = await readGathering(env.DB, id)
+    if (!gathering) return error('Gathering not found', 404)
+    const idx = (gathering.messages || []).findIndex((m) => m.id === messageId)
+    if (idx === -1) return error('Message not found', 404)
+
+    if (method === 'PATCH') {
+      const body = (await request.json()) as Partial<InboxMessage>
+      gathering.messages[idx] = {
+        ...gathering.messages[idx],
+        read: body.read !== undefined ? Boolean(body.read) : gathering.messages[idx].read,
+      }
+      await writeGathering(env.DB, gathering, false)
+      return json(gathering)
+    }
+
+    if (method === 'DELETE') {
+      gathering.messages = gathering.messages.filter((m) => m.id !== messageId)
       await writeGathering(env.DB, gathering, false)
       return json(gathering)
     }

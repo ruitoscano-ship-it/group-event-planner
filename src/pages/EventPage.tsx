@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { GuestEditor } from '../components/GuestEditor'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { MenuPicker } from '../components/MenuPicker'
 import { useI18n } from '../i18n/I18nContext'
@@ -27,7 +28,7 @@ import {
 import { useGatherings } from '../store/GatheringsContext'
 import type { GroupMember } from '../types'
 
-type Tab = 'menu' | 'guests' | 'payments'
+type Tab = 'menu' | 'guests' | 'payments' | 'inbox'
 
 export function EventPage() {
   const { eventId = '' } = useParams()
@@ -45,6 +46,8 @@ export function EventPage() {
     addAttendee,
     updateAttendee,
     removeAttendee,
+    markMessageRead,
+    deleteMessage,
   } = useGatherings()
   const gathering = getGathering(eventId)
   const [fetching, setFetching] = useState(!gathering)
@@ -59,11 +62,15 @@ export function EventPage() {
     date: '',
     time: '',
     location: '',
+    organizerName: '',
+    organizerEmail: '',
+    organizerPhone: '',
   })
   const [detailsBusy, setDetailsBusy] = useState(false)
   const [detailsMsg, setDetailsMsg] = useState<string | null>(null)
   const [detailsError, setDetailsError] = useState(false)
   const [menuMsg, setMenuMsg] = useState<string | null>(null)
+  const [editingGuestId, setEditingGuestId] = useState<string | null>(null)
   const [menuForm, setMenuForm] = useState({
     name: '',
     description: '',
@@ -79,6 +86,7 @@ export function EventPage() {
     email: '',
     phone: '',
     notes: '',
+    menuRequest: '',
   })
   const [guestMembers, setGuestMembers] = useState<GroupMember[]>(() => [
     createMemberDraft(),
@@ -117,8 +125,19 @@ export function EventPage() {
       date: gathering.date || '',
       time: gathering.time || '',
       location: gathering.location || '',
+      organizerName: gathering.organizerName || '',
+      organizerEmail: gathering.organizerEmail || '',
+      organizerPhone: gathering.organizerPhone || '',
     })
-  }, [gathering?.id, gathering?.date, gathering?.time, gathering?.location])
+  }, [
+    gathering?.id,
+    gathering?.date,
+    gathering?.time,
+    gathering?.location,
+    gathering?.organizerName,
+    gathering?.organizerEmail,
+    gathering?.organizerPhone,
+  ])
 
   const totals = useMemo(
     () => (gathering ? gatheringTotals(gathering) : null),
@@ -191,6 +210,9 @@ export function EventPage() {
         date: detailsForm.date,
         time: detailsForm.time,
         location: detailsForm.location.trim(),
+        organizerName: detailsForm.organizerName.trim(),
+        organizerEmail: detailsForm.organizerEmail.trim(),
+        organizerPhone: detailsForm.organizerPhone.trim(),
       })
       setDetailsMsg(pickFeedback(t, [...detailsSavedKeys]))
     } catch (err) {
@@ -284,13 +306,17 @@ export function EventPage() {
     if (guestForm.asGroup) {
       if (guestMembers.length === 0) {
         setGuestMsg(t('needMembers'))
+        setGuestError(true)
         return
       }
-      const incomplete = guestMembers.some(
-        (m) => !m.name.trim() || m.menuItemIds.length === 0,
-      )
+      const incomplete = guestMembers.some((m) => {
+        if (!m.name.trim()) return true
+        if (gathering.menu.length === 0) return false
+        return m.menuItemIds.length === 0 && !m.menuRequest.trim()
+      })
       if (incomplete) {
         setGuestMsg(t('needMemberMenus'))
+        setGuestError(true)
         return
       }
     }
@@ -307,6 +333,7 @@ export function EventPage() {
         menuItemIds: guestForm.asGroup ? [] : guestForm.menuItemIds,
         allergies: guestForm.asGroup ? '' : guestForm.allergies.trim(),
         notes: guestForm.notes.trim(),
+        menuRequest: guestForm.asGroup ? '' : guestForm.menuRequest.trim(),
         isGroup: guestForm.asGroup,
         groupSize: guestForm.asGroup ? guestMembers.length : 1,
         members: guestForm.asGroup
@@ -314,6 +341,7 @@ export function EventPage() {
               ...m,
               name: m.name.trim(),
               allergies: m.allergies.trim(),
+              menuRequest: m.menuRequest.trim(),
             }))
           : [],
       })
@@ -325,6 +353,7 @@ export function EventPage() {
         email: '',
         phone: '',
         notes: '',
+        menuRequest: '',
       })
       setGuestMembers([createMemberDraft(), createMemberDraft()])
       setGuestMsg(pickFeedback(t, [...guestAddedKeys]))
@@ -421,6 +450,41 @@ export function EventPage() {
                 placeholder={t('placeholderLocation')}
               />
             </label>
+            <label>
+              {t('organizerName')}
+              <input
+                value={detailsForm.organizerName}
+                onChange={(e) =>
+                  setDetailsForm({ ...detailsForm, organizerName: e.target.value })
+                }
+                placeholder={t('organizerNamePlaceholder')}
+                autoComplete="name"
+              />
+            </label>
+            <label>
+              {t('organizerEmail')}
+              <input
+                type="email"
+                value={detailsForm.organizerEmail}
+                onChange={(e) =>
+                  setDetailsForm({ ...detailsForm, organizerEmail: e.target.value })
+                }
+                placeholder={t('placeholderEmail')}
+                autoComplete="email"
+              />
+            </label>
+            <label className="full">
+              {t('organizerPhone')}
+              <input
+                type="tel"
+                value={detailsForm.organizerPhone}
+                onChange={(e) =>
+                  setDetailsForm({ ...detailsForm, organizerPhone: e.target.value })
+                }
+                placeholder={t('placeholderPhone')}
+                autoComplete="tel"
+              />
+            </label>
           </div>
           <div className="form-actions">
             <button className="btn btn-accent" type="submit" disabled={detailsBusy}>
@@ -462,6 +526,7 @@ export function EventPage() {
           ['menu', 'tabMenu'],
           ['guests', 'tabGuests'],
           ['payments', 'tabPayments'],
+          ['inbox', 'tabInbox'],
         ] as const).map(([key, label]) => (
           <button
             key={key}
@@ -470,6 +535,12 @@ export function EventPage() {
             onClick={() => setTab(key)}
           >
             {t(label)}
+            {key === 'inbox' &&
+              (gathering.messages || []).some((m) => !m.read) && (
+                <span className="tab-badge">
+                  {(gathering.messages || []).filter((m) => !m.read).length}
+                </span>
+              )}
           </button>
         ))}
       </div>
@@ -802,6 +873,20 @@ export function EventPage() {
                             emptyLabel={t('organizerNoMenu')}
                           />
                         </div>
+                        {gathering.menuCardUrl && (
+                          <label>
+                            {t('menuRequest')}
+                            <textarea
+                              value={member.menuRequest}
+                              onChange={(e) =>
+                                updateGuestMember(member.id, {
+                                  menuRequest: e.target.value,
+                                })
+                              }
+                              placeholder={t('menuRequestPlaceholder')}
+                            />
+                          </label>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -837,6 +922,21 @@ export function EventPage() {
                     }
                     emptyLabel={t('organizerNoMenu')}
                   />
+                  {gathering.menuCardUrl && (
+                    <label
+                      className="full"
+                      style={{ display: 'block', marginTop: '0.85rem' }}
+                    >
+                      {t('menuRequest')}
+                      <textarea
+                        value={guestForm.menuRequest}
+                        onChange={(e) =>
+                          setGuestForm({ ...guestForm, menuRequest: e.target.value })
+                        }
+                        placeholder={t('menuRequestPlaceholder')}
+                      />
+                    </label>
+                  )}
                 </>
               )}
 
@@ -878,81 +978,81 @@ export function EventPage() {
               <div className="empty">{t('noRsvpsYet')}</div>
             ) : (
               <div className="guest-list">
-                {gathering.attendees.map((a) => {
-                  const owed = attendeeTotal(a, gathering.menu)
-                  const variable = selectionHasAlaCarte(a, gathering.menu)
-                  return (
-                    <div key={a.id} className="guest-row">
-                      <div>
-                        <h4>{a.name}</h4>
-                        <p>
-                          {t('registeredBy', { name: a.registeredBy })}
-                          {a.registeredBy !== a.name ? ` ${t('forSomeoneElse')}` : ''}
-                        </p>
-                        {(a.email || a.phone) && (
-                          <p className="sub" style={{ marginTop: '0.25rem' }}>
-                            {[a.email, a.phone].filter(Boolean).join(' · ')}
-                          </p>
-                        )}
-                        <div className="guest-meta">
-                          {a.isGroup && (
-                            <span className="chip chip-warm">
-                              {t('groupBadge', { count: partySize(a) })}
-                            </span>
-                          )}
-                          {!a.isGroup || !a.members?.length ? (
-                            <span className="chip">
-                              {menuLabel(a.menuItemIds, gathering.menu, t('noSelection'))}
-                            </span>
-                          ) : null}
-                          <span className="chip chip-warm">
-                            {formatMoney(owed, gathering.currency, localeTag)}
-                            {variable ? ' +' : ''}
-                          </span>
-                          {variable && (
-                            <span className="chip chip-muted">{t('alaCarte')}</span>
-                          )}
-                          {a.allergies && (
-                            <span className="chip chip-allergy">
-                              {t('allergy', { value: a.allergies })}
-                            </span>
-                          )}
-                        </div>
-                        {a.isGroup && a.members?.length ? (
-                          <ul className="member-picks">
-                            {a.members.map((m) => (
-                              <li key={m.id}>
-                                <strong>{m.name}</strong>
-                                {' · '}
-                                {menuLabel(m.menuItemIds, gathering.menu, t('noSelection'))}
-                                {m.allergies ? (
-                                  <>
-                                    {' · '}
-                                    <span className="allergy">{m.allergies}</span>
-                                  </>
-                                ) : null}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
-                        {a.notes && <p style={{ marginTop: '0.5rem' }}>{a.notes}</p>}
-                      </div>
-                      <div className="row-actions">
-                        <button
-                          className="btn btn-danger btn-sm"
-                          type="button"
-                          onClick={() => void removeAttendee(gathering.id, a.id)}
-                        >
-                          {t('remove')}
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
+                {gathering.attendees.map((a) => (
+                  <GuestEditor
+                    key={a.id}
+                    gathering={gathering}
+                    attendee={a}
+                    editing={editingGuestId === a.id}
+                    onToggleEdit={() =>
+                      setEditingGuestId((id) => (id === a.id ? null : a.id))
+                    }
+                    onSave={async (patch) => {
+                      await updateAttendee(gathering.id, a.id, patch)
+                      setEditingGuestId(null)
+                    }}
+                    onRemove={() => void removeAttendee(gathering.id, a.id)}
+                  />
+                ))}
               </div>
             )}
           </section>
         </div>
+      )}
+
+      {tab === 'inbox' && (
+        <section className="panel">
+          <h2>{t('inboxTitle')}</h2>
+          <p className="sub">{t('inboxSub')}</p>
+          {(gathering.messages || []).length === 0 ? (
+            <div className="empty">{t('inboxEmpty')}</div>
+          ) : (
+            <div className="inbox-list">
+              {(gathering.messages || []).map((message) => (
+                <article
+                  key={message.id}
+                  className={`inbox-item ${message.read ? '' : 'unread'}`}
+                >
+                  <div className="inbox-item-head">
+                    <div>
+                      <h4>{message.fromName}</h4>
+                      <p className="sub">
+                        {[message.fromEmail, message.fromPhone]
+                          .filter(Boolean)
+                          .join(' · ') || t('noContactDetails')}
+                        {' · '}
+                        {new Date(message.createdAt).toLocaleString(localeTag)}
+                      </p>
+                    </div>
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() =>
+                          void markMessageRead(
+                            gathering.id,
+                            message.id,
+                            !message.read,
+                          )
+                        }
+                      >
+                        {message.read ? t('markUnread') : t('markRead')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        onClick={() => void deleteMessage(gathering.id, message.id)}
+                      >
+                        {t('remove')}
+                      </button>
+                    </div>
+                  </div>
+                  <p className="inbox-body">{message.body}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       {tab === 'payments' && (

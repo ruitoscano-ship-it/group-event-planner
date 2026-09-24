@@ -34,6 +34,7 @@ export function createMemberDraft(partial?: Partial<GroupMember>): GroupMember {
     name: '',
     menuItemIds: [],
     allergies: '',
+    menuRequest: '',
     ...partial,
   }
 }

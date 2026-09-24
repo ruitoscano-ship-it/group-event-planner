@@ -1370,3 +1370,76 @@ textarea {
     animation: none;
   }
 }
+
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  margin-left: 0.4rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--accent-deep);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.guest-row-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.guest-row-editing {
+  border-color: rgba(0, 107, 95, 0.28);
+  background: linear-gradient(180deg, #f7fcfa 0%, #fff 40%);
+}
+
+.guest-edit-form {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+
+.inbox-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.inbox-item {
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.inbox-item.unread {
+  border-color: rgba(0, 107, 95, 0.35);
+  background: linear-gradient(135deg, #eef8f5 0%, #fff 55%);
+  box-shadow: 0 10px 24px rgba(0, 79, 70, 0.06);
+}
+
+.inbox-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin-bottom: 0.55rem;
+}
+
+.inbox-item-head h4 {
+  margin: 0;
+  font-family: var(--font-display);
+}
+
+.inbox-body {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}

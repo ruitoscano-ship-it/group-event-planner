@@ -13,6 +13,8 @@ export type GroupMember = {
   name: string
   menuItemIds: string[]
   allergies: string
+  /** Free-text order from a printed menu / carte */
+  menuRequest: string
 }
 
 export type Attendee = {
@@ -24,6 +26,8 @@ export type Attendee = {
   menuItemIds: string[]
   allergies: string
   notes: string
+  /** Free-text order from a printed menu / carte */
+  menuRequest: string
   amountPaid: number
   createdAt: string
   /** Family / group registration */
@@ -31,6 +35,16 @@ export type Attendee = {
   groupSize: number
   /** Per-person menu picks when registering as a group */
   members: GroupMember[]
+}
+
+export type InboxMessage = {
+  id: string
+  fromName: string
+  fromEmail: string
+  fromPhone: string
+  body: string
+  createdAt: string
+  read: boolean
 }
 
 export type Gathering = {
@@ -42,16 +56,27 @@ export type Gathering = {
   location: string
   notes: string
   currency: string
+  organizerName: string
+  organizerEmail: string
+  organizerPhone: string
   /** Uploaded image path or external URL to the printed menu / carte */
   menuCardUrl: string
   menu: MenuItem[]
   attendees: Attendee[]
+  messages: InboxMessage[]
   createdAt: string
 }
 
 export type GatheringInput = Omit<
   Gathering,
-  'id' | 'menu' | 'attendees' | 'createdAt' | 'menuCardUrl'
+  'id' | 'menu' | 'attendees' | 'messages' | 'createdAt' | 'menuCardUrl'
 > & {
   menuCardUrl?: string
+}
+
+export type MessageInput = {
+  fromName: string
+  fromEmail?: string
+  fromPhone?: string
+  body: string
 }

@@ -21,7 +21,7 @@ import type { GroupMember } from '../types'
 export function RsvpPage() {
   const { eventId = '' } = useParams()
   const { t, localeTag } = useI18n()
-  const { getGathering, ensureGathering, addAttendee } = useGatherings()
+  const { getGathering, ensureGathering, addAttendee, sendMessage } = useGatherings()
   const gathering = getGathering(eventId)
 
   const [fetching, setFetching] = useState(!gathering)
@@ -39,10 +39,20 @@ export function RsvpPage() {
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [notes, setNotes] = useState('')
+  const [menuRequest, setMenuRequest] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
   const [saving, setSaving] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [contactForm, setContactForm] = useState({
+    fromName: '',
+    fromEmail: '',
+    fromPhone: '',
+    body: '',
+  })
+  const [contactBusy, setContactBusy] = useState(false)
+  const [contactMsg, setContactMsg] = useState<string | null>(null)
+  const [contactError, setContactError] = useState(false)
 
   useEffect(() => {
     if (!eventId || gathering) {
@@ -141,7 +151,11 @@ export function RsvpPage() {
         setSubmitError(t('needMembers'))
         return
       }
-      const incomplete = members.some((m) => !m.name.trim() || m.menuItemIds.length === 0)
+      const incomplete = members.some((m) => {
+        if (!m.name.trim()) return true
+        if (gathering.menu.length === 0) return false
+        return m.menuItemIds.length === 0 && !m.menuRequest.trim()
+      })
       if (incomplete) {
         setSubmitError(t('needMemberMenus'))
         return
@@ -159,6 +173,7 @@ export function RsvpPage() {
         menuItemIds: asGroup ? [] : menuItemIds,
         allergies: asGroup ? '' : allergies.trim(),
         notes: notes.trim(),
+        menuRequest: asGroup ? '' : menuRequest.trim(),
         isGroup: asGroup,
         groupSize: asGroup ? members.length : 1,
         members: asGroup
@@ -166,6 +181,7 @@ export function RsvpPage() {
               ...m,
               name: m.name.trim(),
               allergies: m.allergies.trim(),
+              menuRequest: m.menuRequest.trim(),
             }))
           : [],
       })
@@ -181,11 +197,40 @@ export function RsvpPage() {
       setEmail('')
       setPhone('')
       setNotes('')
+      setMenuRequest('')
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : t('rsvpSaveFailed'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function onContact(e: FormEvent) {
+    e.preventDefault()
+    if (!gathering || contactBusy) return
+    if (!contactForm.fromName.trim() || !contactForm.body.trim()) {
+      setContactError(true)
+      setContactMsg(t('contactRequired'))
+      return
+    }
+    setContactBusy(true)
+    setContactMsg(null)
+    setContactError(false)
+    try {
+      await sendMessage(gathering.id, {
+        fromName: contactForm.fromName.trim(),
+        fromEmail: contactForm.fromEmail.trim(),
+        fromPhone: contactForm.fromPhone.trim(),
+        body: contactForm.body.trim(),
+      })
+      setContactMsg(t('contactSent'))
+      setContactForm({ fromName: '', fromEmail: '', fromPhone: '', body: '' })
+    } catch (err) {
+      setContactError(true)
+      setContactMsg(err instanceof Error ? err.message : t('contactFailed'))
+    } finally {
+      setContactBusy(false)
     }
   }
 
@@ -415,6 +460,18 @@ export function RsvpPage() {
                           emptyLabel={t('organizerNoMenu')}
                         />
                       </div>
+                      {gathering.menuCardUrl && (
+                        <label>
+                          {t('menuRequest')}
+                          <textarea
+                            value={member.menuRequest}
+                            onChange={(e) =>
+                              updateMember(member.id, { menuRequest: e.target.value })
+                            }
+                            placeholder={t('menuRequestPlaceholder')}
+                          />
+                        </label>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -443,6 +500,19 @@ export function RsvpPage() {
                   }
                   emptyLabel={t('organizerNoMenu')}
                 />
+                {gathering.menuCardUrl && (
+                  <label
+                    className="full"
+                    style={{ display: 'block', marginTop: '0.85rem' }}
+                  >
+                    {t('menuRequest')}
+                    <textarea
+                      value={menuRequest}
+                      onChange={(e) => setMenuRequest(e.target.value)}
+                      placeholder={t('menuRequestPlaceholder')}
+                    />
+                  </label>
+                )}
               </>
             )}
 
@@ -533,6 +603,89 @@ export function RsvpPage() {
           )}
         </section>
       </div>
+
+      <section className="panel" style={{ marginTop: '1rem' }}>
+        <h2>{t('contactOrganizer')}</h2>
+        <p className="sub">{t('contactOrganizerSub')}</p>
+        {(gathering.organizerName ||
+          gathering.organizerEmail ||
+          gathering.organizerPhone) && (
+          <p className="sub" style={{ marginBottom: '0.85rem' }}>
+            {[
+              gathering.organizerName,
+              gathering.organizerEmail,
+              gathering.organizerPhone,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        )}
+        {contactMsg && (
+          <div
+            className={`feedback-banner ${contactError ? 'error' : ''}`}
+            role="status"
+          >
+            {contactMsg}
+          </div>
+        )}
+        <form onSubmit={(e) => void onContact(e)}>
+          <div className="form-grid">
+            <label className="full">
+              {t('yourName')}
+              <input
+                required
+                value={contactForm.fromName}
+                onChange={(e) =>
+                  setContactForm({ ...contactForm, fromName: e.target.value })
+                }
+                placeholder={t('placeholderRegistrar')}
+                autoComplete="name"
+              />
+            </label>
+            <label>
+              {t('emailOptional')}
+              <input
+                type="email"
+                value={contactForm.fromEmail}
+                onChange={(e) =>
+                  setContactForm({ ...contactForm, fromEmail: e.target.value })
+                }
+                placeholder={t('placeholderEmail')}
+                autoComplete="email"
+              />
+            </label>
+            <label>
+              {t('phoneOptional')}
+              <input
+                type="tel"
+                value={contactForm.fromPhone}
+                onChange={(e) =>
+                  setContactForm({ ...contactForm, fromPhone: e.target.value })
+                }
+                placeholder={t('placeholderPhone')}
+                autoComplete="tel"
+              />
+            </label>
+            <label className="full">
+              {t('contactMessage')}
+              <textarea
+                required
+                value={contactForm.body}
+                onChange={(e) =>
+                  setContactForm({ ...contactForm, body: e.target.value })
+                }
+                placeholder={t('contactMessagePlaceholder')}
+                rows={4}
+              />
+            </label>
+          </div>
+          <div className="form-actions">
+            <button className="btn btn-accent" type="submit" disabled={contactBusy}>
+              {contactBusy ? t('saving') : t('sendMessage')}
+            </button>
+          </div>
+        </form>
+      </section>
     </>
   )
 }

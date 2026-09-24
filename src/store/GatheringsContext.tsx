@@ -14,7 +14,7 @@ import {
   rememberGatheringId,
   saveKnownIds,
 } from '../lib/knownIds'
-import type { Attendee, Gathering, GatheringInput, MenuItem } from '../types'
+import type { Attendee, Gathering, GatheringInput, MenuItem, MessageInput } from '../types'
 
 type Store = {
   gatherings: Gathering[]
@@ -40,6 +40,13 @@ type Store = {
     patch: Partial<Attendee>,
   ) => Promise<void>
   removeAttendee: (gatheringId: string, attendeeId: string) => Promise<void>
+  sendMessage: (gatheringId: string, message: MessageInput) => Promise<void>
+  markMessageRead: (
+    gatheringId: string,
+    messageId: string,
+    read?: boolean,
+  ) => Promise<void>
+  deleteMessage: (gatheringId: string, messageId: string) => Promise<void>
   getGathering: (id: string) => Gathering | undefined
 }
 
@@ -156,6 +163,24 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
     setGatherings((prev) => upsert(prev, next))
   }, [])
 
+  const sendMessage = useCallback(async (gatheringId: string, message: MessageInput) => {
+    const next = await api.sendMessage(gatheringId, message)
+    setGatherings((prev) => upsert(prev, next))
+  }, [])
+
+  const markMessageRead = useCallback(
+    async (gatheringId: string, messageId: string, read = true) => {
+      const next = await api.updateMessage(gatheringId, messageId, { read })
+      setGatherings((prev) => upsert(prev, next))
+    },
+    [],
+  )
+
+  const deleteMessage = useCallback(async (gatheringId: string, messageId: string) => {
+    const next = await api.deleteMessage(gatheringId, messageId)
+    setGatherings((prev) => upsert(prev, next))
+  }, [])
+
   const getGathering = useCallback(
     (id: string) => gatherings.find((g) => g.id === id),
     [gatherings],
@@ -177,6 +202,9 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       addAttendee,
       updateAttendee,
       removeAttendee,
+      sendMessage,
+      markMessageRead,
+      deleteMessage,
       getGathering,
     }),
     [
@@ -194,6 +222,9 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       addAttendee,
       updateAttendee,
       removeAttendee,
+      sendMessage,
+      markMessageRead,
+      deleteMessage,
       getGathering,
     ],
   )

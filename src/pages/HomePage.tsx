@@ -14,6 +14,9 @@ const emptyForm: GatheringInput = {
   location: '',
   notes: '',
   currency: 'EUR',
+  organizerName: '',
+  organizerEmail: '',
+  organizerPhone: '',
 }
 
 export function HomePage() {
@@ -36,6 +39,9 @@ export function HomePage() {
         title: form.title.trim(),
         location: form.location.trim(),
         notes: form.notes.trim(),
+        organizerName: (form.organizerName || '').trim(),
+        organizerEmail: (form.organizerEmail || '').trim(),
+        organizerPhone: (form.organizerPhone || '').trim(),
       })
       setForm(emptyForm)
       setShowForm(false)
@@ -167,6 +173,35 @@ export function HomePage() {
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   placeholder={t('placeholderNotes')}
+                />
+              </label>
+              <label>
+                {t('organizerName')}
+                <input
+                  value={form.organizerName || ''}
+                  onChange={(e) => setForm({ ...form, organizerName: e.target.value })}
+                  placeholder={t('organizerNamePlaceholder')}
+                  autoComplete="name"
+                />
+              </label>
+              <label>
+                {t('organizerEmail')}
+                <input
+                  type="email"
+                  value={form.organizerEmail || ''}
+                  onChange={(e) => setForm({ ...form, organizerEmail: e.target.value })}
+                  placeholder={t('placeholderEmail')}
+                  autoComplete="email"
+                />
+              </label>
+              <label className="full">
+                {t('organizerPhone')}
+                <input
+                  type="tel"
+                  value={form.organizerPhone || ''}
+                  onChange={(e) => setForm({ ...form, organizerPhone: e.target.value })}
+                  placeholder={t('placeholderPhone')}
+                  autoComplete="tel"
                 />
               </label>
             </div>

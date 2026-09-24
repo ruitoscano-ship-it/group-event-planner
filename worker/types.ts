@@ -12,6 +12,7 @@ export type GroupMember = {
   name: string
   menuItemIds: string[]
   allergies: string
+  menuRequest: string
 }
 
 export type Attendee = {
@@ -23,11 +24,22 @@ export type Attendee = {
   menuItemIds: string[]
   allergies: string
   notes: string
+  menuRequest: string
   amountPaid: number
   createdAt: string
   isGroup: boolean
   groupSize: number
   members: GroupMember[]
+}
+
+export type InboxMessage = {
+  id: string
+  fromName: string
+  fromEmail: string
+  fromPhone: string
+  body: string
+  createdAt: string
+  read: boolean
 }
 
 export type Gathering = {
@@ -39,9 +51,13 @@ export type Gathering = {
   location: string
   notes: string
   currency: string
+  organizerName: string
+  organizerEmail: string
+  organizerPhone: string
   menuCardUrl: string
   menu: MenuItem[]
   attendees: Attendee[]
+  messages: InboxMessage[]
   createdAt: string
 }
 
@@ -53,7 +69,17 @@ export type GatheringInput = {
   location: string
   notes: string
   currency: string
+  organizerName?: string
+  organizerEmail?: string
+  organizerPhone?: string
   menuCardUrl?: string
+}
+
+export type MessageInput = {
+  fromName: string
+  fromEmail?: string
+  fromPhone?: string
+  body: string
 }
 
 export type Env = {

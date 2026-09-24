@@ -1,4 +1,10 @@
-import type { Attendee, Gathering, GatheringInput, MenuItem } from '../types'
+import type {
+  Attendee,
+  Gathering,
+  GatheringInput,
+  MenuItem,
+  MessageInput,
+} from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -86,6 +92,28 @@ export const api = {
   removeAttendee(gatheringId: string, attendeeId: string) {
     return request<Gathering>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/attendees/${encodeURIComponent(attendeeId)}`,
+      { method: 'DELETE' },
+    )
+  },
+  sendMessage(gatheringId: string, message: MessageInput) {
+    return request<Gathering>(
+      `/api/gatherings/${encodeURIComponent(gatheringId)}/messages`,
+      { method: 'POST', body: JSON.stringify(message) },
+    )
+  },
+  updateMessage(
+    gatheringId: string,
+    messageId: string,
+    patch: { read?: boolean },
+  ) {
+    return request<Gathering>(
+      `/api/gatherings/${encodeURIComponent(gatheringId)}/messages/${encodeURIComponent(messageId)}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    )
+  },
+  deleteMessage(gatheringId: string, messageId: string) {
+    return request<Gathering>(
+      `/api/gatherings/${encodeURIComponent(gatheringId)}/messages/${encodeURIComponent(messageId)}`,
       { method: 'DELETE' },
     )
   },
