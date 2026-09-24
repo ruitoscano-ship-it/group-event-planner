@@ -46,15 +46,20 @@ export function MenuPicker({
                 </>
               )}
               <br />
-              <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>
+              <span className="menu-option-meta" style={{ fontSize: '0.85rem' }}>
                 {item.category}
                 {item.description ? ` · ${item.description}` : ''}
               </span>
             </span>
-            <span className="price">
-              {item.isAlaCarte
-                ? t('priceVariable')
-                : formatMoney(item.price, currency, localeTag)}
+            <span className="menu-option-price">
+              {!item.isAlaCarte && (
+                <span className="est-label">{t('estimatedShort')}</span>
+              )}
+              <span className="price">
+                {item.isAlaCarte
+                  ? t('priceVariable')
+                  : formatMoney(item.price, currency, localeTag)}
+              </span>
             </span>
           </label>
         )

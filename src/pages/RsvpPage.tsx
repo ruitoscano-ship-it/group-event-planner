@@ -14,6 +14,7 @@ import {
   toggleMenuSelection,
   unitPriceForIds,
 } from '../lib/money'
+import { pickFeedback, rsvpSuccessKeys } from '../lib/feedback'
 import { useGatherings } from '../store/GatheringsContext'
 import type { GroupMember } from '../types'
 
@@ -39,6 +40,7 @@ export function RsvpPage() {
   const [phone, setPhone] = useState('')
   const [notes, setNotes] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
   const [saving, setSaving] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -167,6 +169,7 @@ export function RsvpPage() {
             }))
           : [],
       })
+      setSuccessMessage(pickFeedback(t, [...rsvpSuccessKeys]))
       setSubmitted(true)
       setName('')
       setRegisteredBy('')
@@ -178,6 +181,7 @@ export function RsvpPage() {
       setEmail('')
       setPhone('')
       setNotes('')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : t('rsvpSaveFailed'))
     } finally {
@@ -248,13 +252,21 @@ export function RsvpPage() {
         </details>
       )}
 
-      {submitted && <div className="success-banner">{t('successBanner')}</div>}
+      {submitted && (
+        <div className="feedback-banner" role="status">
+          {successMessage || t('feedbackRsvp1')}
+        </div>
+      )}
+      {submitError && (
+        <div className="feedback-banner error" role="alert">
+          {submitError}
+        </div>
+      )}
 
       <div className="layout-split rsvp-layout">
         <section className="panel">
           <h2>{t('register')}</h2>
           <p className="sub">{t('registerSub')}</p>
-          {submitError && <p className="allergy">{submitError}</p>}
           <form onSubmit={(e) => void onSubmit(e)}>
             <div className="form-grid">
               <label className="full">
@@ -436,19 +448,23 @@ export function RsvpPage() {
 
             <div className="sticky-actions">
               <div className="form-actions" style={{ justifyContent: 'space-between' }}>
-                <strong>
-                  {hasAlaCartePick ? t('estimatedVariable') : t('estimated')}{' '}
-                  <span className="price">
-                    {formatMoney(estimated, gathering.currency, localeTag)}
+                <div className="estimate-block">
+                  <span className="estimate-label">
+                    {hasAlaCartePick ? t('estimatedVariable') : t('estimated')}
                   </span>
-                  {asGroup && (
-                    <span style={{ color: 'var(--muted)', fontWeight: 600, fontSize: '0.85rem' }}>
-                      {' '}
-                      · {members.length}{' '}
-                      {members.length === 1 ? t('personLabel') : t('peopleLabel')}
-                    </span>
-                  )}
-                </strong>
+                  <span className="estimate-value price">
+                    {formatMoney(estimated, gathering.currency, localeTag)}
+                    {hasAlaCartePick ? '+' : ''}
+                  </span>
+                  <span className="estimate-note">
+                    {hasAlaCartePick ? t('estimatedNoteVariable') : t('estimatedNote')}
+                    {asGroup
+                      ? ` · ${members.length} ${
+                          members.length === 1 ? t('personLabel') : t('peopleLabel')
+                        }`
+                      : ''}
+                  </span>
+                </div>
                 <button className="btn btn-accent" type="submit" disabled={saving}>
                   {saving ? t('saving') : t('confirmRsvp')}
                 </button>

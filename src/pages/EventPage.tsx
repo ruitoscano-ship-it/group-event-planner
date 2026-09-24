@@ -17,6 +17,13 @@ import {
   toggleMenuSelection,
   unitPriceForIds,
 } from '../lib/money'
+import {
+  detailsSavedKeys,
+  guestAddedKeys,
+  menuCardSavedKeys,
+  menuItemSavedKeys,
+  pickFeedback,
+} from '../lib/feedback'
 import { useGatherings } from '../store/GatheringsContext'
 import type { GroupMember } from '../types'
 
@@ -55,6 +62,8 @@ export function EventPage() {
   })
   const [detailsBusy, setDetailsBusy] = useState(false)
   const [detailsMsg, setDetailsMsg] = useState<string | null>(null)
+  const [detailsError, setDetailsError] = useState(false)
+  const [menuMsg, setMenuMsg] = useState<string | null>(null)
   const [menuForm, setMenuForm] = useState({
     name: '',
     description: '',
@@ -77,6 +86,7 @@ export function EventPage() {
   ])
   const [guestBusy, setGuestBusy] = useState(false)
   const [guestMsg, setGuestMsg] = useState<string | null>(null)
+  const [guestError, setGuestError] = useState(false)
 
   useEffect(() => {
     if (!eventId || gathering) {
@@ -175,14 +185,16 @@ export function EventPage() {
     if (!gathering || detailsBusy) return
     setDetailsBusy(true)
     setDetailsMsg(null)
+    setDetailsError(false)
     try {
       await updateGathering(gathering.id, {
         date: detailsForm.date,
         time: detailsForm.time,
         location: detailsForm.location.trim(),
       })
-      setDetailsMsg(t('detailsSaved'))
+      setDetailsMsg(pickFeedback(t, [...detailsSavedKeys]))
     } catch (err) {
+      setDetailsError(true)
       setDetailsMsg(err instanceof Error ? err.message : t('detailsSaveFailed'))
     } finally {
       setDetailsBusy(false)
@@ -211,6 +223,7 @@ export function EventPage() {
         category: '',
         isAlaCarte: false,
       })
+      setMenuMsg(pickFeedback(t, [...menuItemSavedKeys]))
     } finally {
       setBusy(false)
     }
@@ -222,7 +235,7 @@ export function EventPage() {
     setCardMsg(null)
     try {
       await setMenuCard(gathering.id, cardLink.trim())
-      setCardMsg(t('menuCardSaved'))
+      setCardMsg(pickFeedback(t, [...menuCardSavedKeys]))
     } catch (err) {
       setCardMsg(err instanceof Error ? err.message : t('menuCardSaved'))
     } finally {
@@ -238,7 +251,7 @@ export function EventPage() {
       const dataUrl = await compressImageFile(file)
       await setMenuCard(gathering.id, dataUrl)
       setCardLink('')
-      setCardMsg(t('menuCardSaved'))
+      setCardMsg(pickFeedback(t, [...menuCardSavedKeys]))
     } catch (err) {
       setCardMsg(err instanceof Error ? err.message : t('menuCardUploading'))
     } finally {
@@ -284,6 +297,7 @@ export function EventPage() {
 
     setGuestBusy(true)
     setGuestMsg(null)
+    setGuestError(false)
     try {
       await addAttendee(gathering.id, {
         name: guestForm.name.trim(),
@@ -313,8 +327,9 @@ export function EventPage() {
         notes: '',
       })
       setGuestMembers([createMemberDraft(), createMemberDraft()])
-      setGuestMsg(t('guestAdded'))
+      setGuestMsg(pickFeedback(t, [...guestAddedKeys]))
     } catch (err) {
+      setGuestError(true)
       setGuestMsg(err instanceof Error ? err.message : t('guestAdded'))
     } finally {
       setGuestBusy(false)
@@ -370,7 +385,14 @@ export function EventPage() {
       <section className="panel" style={{ marginBottom: '1rem' }}>
         <h2>{t('editDetails')}</h2>
         <p className="sub">{t('editDetailsSub')}</p>
-        {detailsMsg && <p className="sub">{detailsMsg}</p>}
+        {detailsMsg && (
+          <div
+            className={`feedback-banner ${detailsError ? 'error' : ''}`}
+            role="status"
+          >
+            {detailsMsg}
+          </div>
+        )}
         <form onSubmit={(e) => void onSaveDetails(e)}>
           <div className="form-grid">
             <label>
@@ -495,7 +517,11 @@ export function EventPage() {
                 </button>
               )}
             </div>
-            {cardMsg && <p className="sub" style={{ marginTop: '0.75rem' }}>{cardMsg}</p>}
+            {cardMsg && (
+              <div className="feedback-banner" role="status" style={{ marginTop: '0.75rem' }}>
+                {cardMsg}
+              </div>
+            )}
             {gathering.menuCardUrl && (
               <div className="menu-card-preview">
                 <img src={gathering.menuCardUrl} alt={t('menuCard')} />
@@ -517,6 +543,11 @@ export function EventPage() {
             <section className="panel">
               <h2>{t('addMenuOption')}</h2>
               <p className="sub">{t('addMenuSub')}</p>
+              {menuMsg && (
+                <div className="feedback-banner" role="status">
+                  {menuMsg}
+                </div>
+              )}
               <form onSubmit={(e) => void onAddMenu(e)}>
                 <div className="form-grid">
                   <label className="full">
@@ -633,7 +664,14 @@ export function EventPage() {
           <section className="panel">
             <h2>{t('organizerRegister')}</h2>
             <p className="sub">{t('organizerRegisterSub')}</p>
-            {guestMsg && <p className="sub">{guestMsg}</p>}
+            {guestMsg && (
+              <div
+                className={`feedback-banner ${guestError ? 'error' : ''}`}
+                role="status"
+              >
+                {guestMsg}
+              </div>
+            )}
             <form onSubmit={(e) => void onAddGuest(e)}>
               <div className="form-grid">
                 <label className="full">
@@ -804,25 +842,27 @@ export function EventPage() {
 
               <div className="sticky-actions">
                 <div className="form-actions" style={{ justifyContent: 'space-between' }}>
-                  <strong>
-                    {guestHasAlaCarte ? t('estimatedVariable') : t('estimated')}{' '}
-                    <span className="price">
-                      {formatMoney(guestEstimate, gathering.currency, localeTag)}
+                  <div className="estimate-block">
+                    <span className="estimate-label">
+                      {guestHasAlaCarte ? t('estimatedVariable') : t('estimated')}
                     </span>
-                    {guestForm.asGroup && (
-                      <span
-                        style={{
-                          color: 'var(--muted)',
-                          fontWeight: 600,
-                          fontSize: '0.85rem',
-                        }}
-                      >
-                        {' '}
-                        · {guestMembers.length}{' '}
-                        {guestMembers.length === 1 ? t('personLabel') : t('peopleLabel')}
-                      </span>
-                    )}
-                  </strong>
+                    <span className="estimate-value price">
+                      {formatMoney(guestEstimate, gathering.currency, localeTag)}
+                      {guestHasAlaCarte ? '+' : ''}
+                    </span>
+                    <span className="estimate-note">
+                      {guestHasAlaCarte
+                        ? t('estimatedNoteVariable')
+                        : t('estimatedNote')}
+                      {guestForm.asGroup
+                        ? ` · ${guestMembers.length} ${
+                            guestMembers.length === 1
+                              ? t('personLabel')
+                              : t('peopleLabel')
+                          }`
+                        : ''}
+                    </span>
+                  </div>
                   <button className="btn btn-accent" type="submit" disabled={guestBusy}>
                     {guestBusy ? t('saving') : t('addGuest')}
                   </button>
