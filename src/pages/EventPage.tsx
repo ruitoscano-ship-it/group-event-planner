@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { AgeGroupPicker } from '../components/AgeGroupPicker'
 import { GuestEditor } from '../components/GuestEditor'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { MenuPicker } from '../components/MenuPicker'
@@ -26,7 +27,7 @@ import {
   pickFeedback,
 } from '../lib/feedback'
 import { useGatherings } from '../store/GatheringsContext'
-import type { GroupMember } from '../types'
+import type { AgeGroup, GroupMember } from '../types'
 
 type Tab = 'menu' | 'guests' | 'payments' | 'inbox'
 
@@ -87,6 +88,7 @@ export function EventPage() {
     phone: '',
     notes: '',
     menuRequest: '',
+    ageGroup: 'adult' as AgeGroup,
   })
   const [guestMembers, setGuestMembers] = useState<GroupMember[]>(() => [
     createMemberDraft(),
@@ -334,6 +336,7 @@ export function EventPage() {
         allergies: guestForm.asGroup ? '' : guestForm.allergies.trim(),
         notes: guestForm.notes.trim(),
         menuRequest: guestForm.asGroup ? '' : guestForm.menuRequest.trim(),
+        ageGroup: guestForm.asGroup ? 'adult' : guestForm.ageGroup,
         isGroup: guestForm.asGroup,
         groupSize: guestForm.asGroup ? guestMembers.length : 1,
         members: guestForm.asGroup
@@ -342,6 +345,7 @@ export function EventPage() {
               name: m.name.trim(),
               allergies: m.allergies.trim(),
               menuRequest: m.menuRequest.trim(),
+              ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
             }))
           : [],
       })
@@ -354,6 +358,7 @@ export function EventPage() {
         phone: '',
         notes: '',
         menuRequest: '',
+        ageGroup: 'adult',
       })
       setGuestMembers([createMemberDraft(), createMemberDraft()])
       setGuestMsg(pickFeedback(t, [...guestAddedKeys]))
@@ -496,16 +501,24 @@ export function EventPage() {
 
       <div className="summary-strip">
         <div className="summary-tile">
-          <span>{t('guests')}</span>
+          <span>{t('invites')}</span>
+          <strong>{totals.inviteCount}</strong>
+        </div>
+        <div className="summary-tile">
+          <span>{t('peopleTotal')}</span>
           <strong>{totals.guestCount}</strong>
+        </div>
+        <div className="summary-tile">
+          <span>{t('adultsCount')}</span>
+          <strong>{totals.adults}</strong>
+        </div>
+        <div className="summary-tile">
+          <span>{t('childrenCount')}</span>
+          <strong>{totals.children}</strong>
         </div>
         <div className="summary-tile">
           <span>{t('menuTotal')}</span>
           <strong>{formatMoney(totals.owed, gathering.currency, localeTag)}</strong>
-        </div>
-        <div className="summary-tile">
-          <span>{t('collected')}</span>
-          <strong>{formatMoney(totals.paid, gathering.currency, localeTag)}</strong>
         </div>
         <div className="summary-tile">
           <span>{t('stillDue')}</span>
@@ -770,16 +783,26 @@ export function EventPage() {
                   {t('registeringAsGroup')}
                 </label>
                 {!guestForm.asGroup && (
-                  <label className="full">
-                    {t('allergiesDietary')}
-                    <input
-                      value={guestForm.allergies}
-                      onChange={(e) =>
-                        setGuestForm({ ...guestForm, allergies: e.target.value })
-                      }
-                      placeholder={t('placeholderAllergies')}
-                    />
-                  </label>
+                  <>
+                    <div className="full">
+                      <AgeGroupPicker
+                        value={guestForm.ageGroup}
+                        onChange={(value) =>
+                          setGuestForm({ ...guestForm, ageGroup: value })
+                        }
+                      />
+                    </div>
+                    <label className="full">
+                      {t('allergiesDietary')}
+                      <input
+                        value={guestForm.allergies}
+                        onChange={(e) =>
+                          setGuestForm({ ...guestForm, allergies: e.target.value })
+                        }
+                        placeholder={t('placeholderAllergies')}
+                      />
+                    </label>
+                  </>
                 )}
                 <label>
                   {t('emailOptional')}
@@ -850,6 +873,12 @@ export function EventPage() {
                             autoComplete="name"
                           />
                         </label>
+                        <AgeGroupPicker
+                          value={member.ageGroup || 'adult'}
+                          onChange={(value) =>
+                            updateGuestMember(member.id, { ageGroup: value })
+                          }
+                        />
                         <label>
                           {t('allergiesDietary')}
                           <input

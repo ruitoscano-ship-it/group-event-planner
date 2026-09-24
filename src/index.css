@@ -759,7 +759,7 @@ textarea {
 
 .summary-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
   margin-bottom: 1.25rem;
 }
@@ -786,6 +786,14 @@ textarea {
 .summary-tile:nth-child(4) {
   background: var(--ink);
   animation-delay: 0.14s;
+}
+.summary-tile:nth-child(5) {
+  background: var(--green-deep);
+  animation-delay: 0.18s;
+}
+.summary-tile:nth-child(6) {
+  background: #1a4d45;
+  animation-delay: 0.22s;
 }
 
 .summary-tile span {
@@ -1544,4 +1552,59 @@ textarea {
   white-space: pre-wrap;
   line-height: 1.5;
   color: var(--ink-soft);
+}
+
+.age-group-picker {
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.age-group-picker legend {
+  margin-bottom: 0.45rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.age-group-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+}
+
+.age-option {
+  min-height: 48px;
+  padding: 0.7rem 0.85rem;
+  border: 2px solid rgba(6, 40, 35, 0.14);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.12s ease;
+}
+
+.age-option:hover {
+  border-color: rgba(0, 107, 95, 0.4);
+  background: #f2faf7;
+}
+
+.age-option:active {
+  transform: scale(0.98);
+}
+
+.age-option.selected {
+  border-color: var(--green-deep);
+  background: linear-gradient(135deg, #b7e4d8 0%, #8ecebe 100%);
+  color: #04352f;
+  box-shadow: inset 0 0 0 1px rgba(0, 79, 70, 0.12);
 }

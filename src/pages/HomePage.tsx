@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { useI18n } from '../i18n/I18nContext'
-import { formatDate, formatMoney, gatheringTotals } from '../lib/money'
+import { formatDate, gatheringTotals } from '../lib/money'
 import { useGatherings } from '../store/GatheringsContext'
 import type { GatheringInput } from '../types'
 
@@ -263,18 +263,20 @@ export function HomePage() {
                   </p>
                   <div className="stats">
                     <div className="stat">
-                      <strong>{totals.guestCount}</strong>
-                      <span>{t('guests')}</span>
+                      <strong>{totals.inviteCount}</strong>
+                      <span>{t('invites')}</span>
                     </div>
                     <div className="stat">
-                      <strong>{formatMoney(totals.owed, g.currency, localeTag)}</strong>
-                      <span>{t('total')}</span>
+                      <strong>{totals.guestCount}</strong>
+                      <span>{t('peopleTotal')}</span>
                     </div>
                     <div className="stat">
                       <strong>
-                        {formatMoney(totals.outstanding, g.currency, localeTag)}
+                        {totals.adults}/{totals.children}
                       </strong>
-                      <span>{t('due')}</span>
+                      <span>
+                        {t('adultsCount')}/{t('childrenCount')}
+                      </span>
                     </div>
                   </div>
                 </Link>

@@ -1,3 +1,5 @@
+export type AgeGroup = 'adult' | 'child'
+
 export type MenuItem = {
   id: string
   name: string
@@ -15,6 +17,7 @@ export type GroupMember = {
   allergies: string
   /** Free-text order from a printed menu / carte */
   menuRequest: string
+  ageGroup: AgeGroup
 }
 
 export type Attendee = {
@@ -28,6 +31,7 @@ export type Attendee = {
   notes: string
   /** Free-text order from a printed menu / carte */
   menuRequest: string
+  ageGroup: AgeGroup
   amountPaid: number
   createdAt: string
   /** Family / group registration */

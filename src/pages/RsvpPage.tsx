@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { AgeGroupPicker } from '../components/AgeGroupPicker'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { MenuPicker } from '../components/MenuPicker'
 import { useI18n } from '../i18n/I18nContext'
@@ -16,7 +17,7 @@ import {
 } from '../lib/money'
 import { pickFeedback, rsvpSuccessKeys } from '../lib/feedback'
 import { useGatherings } from '../store/GatheringsContext'
-import type { GroupMember } from '../types'
+import type { AgeGroup, GroupMember } from '../types'
 
 export function RsvpPage() {
   const { eventId = '' } = useParams()
@@ -40,6 +41,7 @@ export function RsvpPage() {
   const [phone, setPhone] = useState('')
   const [notes, setNotes] = useState('')
   const [menuRequest, setMenuRequest] = useState('')
+  const [ageGroup, setAgeGroup] = useState<AgeGroup>('adult')
   const [submitted, setSubmitted] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
   const [saving, setSaving] = useState(false)
@@ -174,6 +176,7 @@ export function RsvpPage() {
         allergies: asGroup ? '' : allergies.trim(),
         notes: notes.trim(),
         menuRequest: asGroup ? '' : menuRequest.trim(),
+        ageGroup: asGroup ? 'adult' : ageGroup,
         isGroup: asGroup,
         groupSize: asGroup ? members.length : 1,
         members: asGroup
@@ -182,6 +185,7 @@ export function RsvpPage() {
               name: m.name.trim(),
               allergies: m.allergies.trim(),
               menuRequest: m.menuRequest.trim(),
+              ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
             }))
           : [],
       })
@@ -198,6 +202,7 @@ export function RsvpPage() {
       setPhone('')
       setNotes('')
       setMenuRequest('')
+      setAgeGroup('adult')
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : t('rsvpSaveFailed'))
@@ -383,6 +388,9 @@ export function RsvpPage() {
               </label>
               {!asGroup && (
                 <>
+                  <div className="full">
+                    <AgeGroupPicker value={ageGroup} onChange={setAgeGroup} />
+                  </div>
                   <label className="full">
                     {t('allergiesDietary')}
                     <input
@@ -437,6 +445,10 @@ export function RsvpPage() {
                           autoComplete="name"
                         />
                       </label>
+                      <AgeGroupPicker
+                        value={member.ageGroup || 'adult'}
+                        onChange={(value) => updateMember(member.id, { ageGroup: value })}
+                      />
                       <label>
                         {t('allergiesDietary')}
                         <input
@@ -563,7 +575,10 @@ export function RsvpPage() {
                         <li key={m.id}>
                           <strong>{m.name}</strong>
                           {' · '}
+                          {m.ageGroup === 'child' ? t('ageChild') : t('ageAdult')}
+                          {' · '}
                           {menuLabel(m.menuItemIds, gathering.menu, t('noSelection'))}
+                          {m.menuRequest ? ` · ${m.menuRequest}` : ''}
                           {m.allergies ? (
                             <>
                               {' · '}
@@ -581,9 +596,16 @@ export function RsvpPage() {
                           {' · '}
                         </>
                       )}
+                      {!a.isGroup && (
+                        <>
+                          {a.ageGroup === 'child' ? t('ageChild') : t('ageAdult')}
+                          {' · '}
+                        </>
+                      )}
                       {a.menuItemIds.length === 1
                         ? t('menuPick', { count: a.menuItemIds.length })
                         : t('menuPicks', { count: a.menuItemIds.length })}
+                      {a.menuRequest ? ` · ${a.menuRequest}` : ''}
                       {a.allergies ? (
                         <>
                           {' · '}

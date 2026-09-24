@@ -46,6 +46,7 @@ function normalizeGathering(raw: Gathering): Gathering {
             menuItemIds: Array.isArray(m.menuItemIds) ? m.menuItemIds : [],
             allergies: (m.allergies || '').trim(),
             menuRequest: (m.menuRequest || '').trim(),
+            ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
           }))
         : []
       const isGroup = Boolean(a.isGroup)
@@ -54,6 +55,7 @@ function normalizeGathering(raw: Gathering): Gathering {
         email: (a.email || '').trim(),
         phone: (a.phone || '').trim(),
         menuRequest: (a.menuRequest || '').trim(),
+        ageGroup: a.ageGroup === 'child' ? 'child' : 'adult',
         isGroup,
         members,
         groupSize: isGroup
@@ -311,6 +313,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
           menuItemIds: Array.isArray(m.menuItemIds) ? m.menuItemIds : [],
           allergies: (m.allergies || '').trim(),
           menuRequest: (m.menuRequest || '').trim(),
+          ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
         }))
       : []
     if (isGroup && members.length === 0) {
@@ -330,6 +333,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       allergies: (body.allergies || '').trim(),
       notes: (body.notes || '').trim(),
       menuRequest: isGroup ? '' : (body.menuRequest || '').trim(),
+      ageGroup: isGroup ? 'adult' : body.ageGroup === 'child' ? 'child' : 'adult',
       amountPaid: Number(body.amountPaid) || 0,
       createdAt: new Date().toISOString(),
       isGroup,
@@ -362,6 +366,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
                 menuItemIds: Array.isArray(m.menuItemIds) ? m.menuItemIds : [],
                 allergies: (m.allergies || '').trim(),
                 menuRequest: (m.menuRequest || '').trim(),
+                ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
               }))
             : []
           : current.members || []
@@ -379,6 +384,12 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
           body.menuRequest !== undefined
             ? String(body.menuRequest).trim()
             : current.menuRequest || '',
+        ageGroup:
+          body.ageGroup !== undefined
+            ? body.ageGroup === 'child'
+              ? 'child'
+              : 'adult'
+            : current.ageGroup || 'adult',
         isGroup,
         members: isGroup ? members : [],
         groupSize: isGroup ? Math.max(1, members.length || Number(body.groupSize) || 1) : 1,

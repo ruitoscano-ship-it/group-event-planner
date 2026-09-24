@@ -1,4 +1,4 @@
-import type { Attendee, Gathering, GroupMember, MenuItem } from '../types'
+import type { AgeGroup, Attendee, Gathering, GroupMember, MenuItem } from '../types'
 
 export function formatMoney(
   amount: number,
@@ -35,8 +35,34 @@ export function createMemberDraft(partial?: Partial<GroupMember>): GroupMember {
     menuItemIds: [],
     allergies: '',
     menuRequest: '',
+    ageGroup: 'adult',
     ...partial,
   }
+}
+
+export function normalizeAgeGroup(value: unknown): AgeGroup {
+  return value === 'child' ? 'child' : 'adult'
+}
+
+export function countAgeGroups(attendees: Attendee[]): {
+  adults: number
+  children: number
+} {
+  let adults = 0
+  let children = 0
+  for (const a of attendees) {
+    if (a.isGroup && a.members?.length) {
+      for (const m of a.members) {
+        if (normalizeAgeGroup(m.ageGroup) === 'child') children += 1
+        else adults += 1
+      }
+    } else {
+      const size = partySize(a)
+      if (normalizeAgeGroup(a.ageGroup) === 'child') children += size
+      else adults += size
+    }
+  }
+  return { adults, children }
 }
 
 export function partySize(attendee: Attendee): number {
@@ -89,10 +115,12 @@ export function gatheringTotals(gathering: Gathering) {
   const paid = gathering.attendees.reduce((sum, a) => sum + a.amountPaid, 0)
   const outstanding = Math.max(0, owed - paid)
   const guestCount = gathering.attendees.reduce((sum, a) => sum + partySize(a), 0)
+  const inviteCount = gathering.attendees.length
+  const { adults, children } = countAgeGroups(gathering.attendees)
   const hasVariable = gathering.attendees.some((a) =>
     selectionHasAlaCarte(a, gathering.menu),
   )
-  return { owed, paid, outstanding, guestCount, hasVariable }
+  return { owed, paid, outstanding, guestCount, inviteCount, adults, children, hasVariable }
 }
 
 export function menuLabel(

@@ -10,6 +10,7 @@ import {
   attendeeTotal,
 } from '../lib/money'
 import type { Attendee, Gathering, GroupMember } from '../types'
+import { AgeGroupPicker } from './AgeGroupPicker'
 import { MenuPicker } from './MenuPicker'
 
 type Props = {
@@ -40,12 +41,20 @@ export function GuestEditor({
 
   useEffect(() => {
     if (!editing) return
-    setDraft(attendee)
     setMembers(
       attendee.members?.length
-        ? attendee.members.map((m) => ({ ...m, menuRequest: m.menuRequest || '' }))
+        ? attendee.members.map((m) => ({
+            ...m,
+            menuRequest: m.menuRequest || '',
+            ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
+          }))
         : [],
     )
+    setDraft({
+      ...attendee,
+      ageGroup: attendee.ageGroup === 'child' ? 'child' : 'adult',
+      menuRequest: attendee.menuRequest || '',
+    })
     setMsg(null)
     setError(false)
   }, [attendee, editing])
@@ -68,6 +77,7 @@ export function GuestEditor({
         allergies: draft.isGroup ? '' : draft.allergies.trim(),
         notes: draft.notes.trim(),
         menuRequest: draft.isGroup ? '' : draft.menuRequest.trim(),
+        ageGroup: draft.isGroup ? 'adult' : draft.ageGroup === 'child' ? 'child' : 'adult',
         menuItemIds: draft.isGroup ? [] : draft.menuItemIds,
         isGroup: draft.isGroup,
         members: draft.isGroup
@@ -76,6 +86,7 @@ export function GuestEditor({
               name: m.name.trim(),
               allergies: m.allergies.trim(),
               menuRequest: m.menuRequest.trim(),
+              ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
             }))
           : [],
         groupSize: draft.isGroup ? Math.max(1, members.length) : 1,
@@ -127,6 +138,11 @@ export function GuestEditor({
                   {t('groupBadge', { count: partySize(attendee) })}
                 </span>
               )}
+              {!attendee.isGroup && (
+                <span className="chip">
+                  {attendee.ageGroup === 'child' ? t('ageChild') : t('ageAdult')}
+                </span>
+              )}
               {!attendee.isGroup || !attendee.members?.length ? (
                 <span className="chip">
                   {menuLabel(attendee.menuItemIds, gathering.menu, t('noSelection'))}
@@ -151,6 +167,8 @@ export function GuestEditor({
                 {attendee.members.map((m) => (
                   <li key={m.id}>
                     <strong>{m.name}</strong>
+                    {' · '}
+                    {m.ageGroup === 'child' ? t('ageChild') : t('ageAdult')}
                     {' · '}
                     {menuLabel(m.menuItemIds, gathering.menu, t('noSelection'))}
                     {m.menuRequest ? ` · ${m.menuRequest}` : ''}
@@ -204,13 +222,21 @@ export function GuestEditor({
                 />
               </label>
               {!draft.isGroup && (
-                <label className="full">
-                  {t('allergiesDietary')}
-                  <input
-                    value={draft.allergies}
-                    onChange={(e) => setDraft({ ...draft, allergies: e.target.value })}
-                  />
-                </label>
+                <>
+                  <div className="full">
+                    <AgeGroupPicker
+                      value={draft.ageGroup === 'child' ? 'child' : 'adult'}
+                      onChange={(value) => setDraft({ ...draft, ageGroup: value })}
+                    />
+                  </div>
+                  <label className="full">
+                    {t('allergiesDietary')}
+                    <input
+                      value={draft.allergies}
+                      onChange={(e) => setDraft({ ...draft, allergies: e.target.value })}
+                    />
+                  </label>
+                </>
               )}
               <label className="full">
                 {t('notes')}
@@ -251,6 +277,12 @@ export function GuestEditor({
                           }
                         />
                       </label>
+                      <AgeGroupPicker
+                        value={member.ageGroup || 'adult'}
+                        onChange={(value) =>
+                          updateMember(member.id, { ageGroup: value })
+                        }
+                      />
                       <label>
                         {t('allergiesDietary')}
                         <input

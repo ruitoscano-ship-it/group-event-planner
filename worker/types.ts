@@ -1,3 +1,5 @@
+export type AgeGroup = 'adult' | 'child'
+
 export type MenuItem = {
   id: string
   name: string
@@ -13,6 +15,7 @@ export type GroupMember = {
   menuItemIds: string[]
   allergies: string
   menuRequest: string
+  ageGroup: AgeGroup
 }
 
 export type Attendee = {
@@ -25,6 +28,7 @@ export type Attendee = {
   allergies: string
   notes: string
   menuRequest: string
+  ageGroup: AgeGroup
   amountPaid: number
   createdAt: string
   isGroup: boolean
