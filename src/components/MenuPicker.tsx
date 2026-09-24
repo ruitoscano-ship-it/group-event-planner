@@ -24,29 +24,41 @@ export function MenuPicker({
   }
 
   return (
-    <div className="menu-picker">
+    <div className="menu-picker" role="group" aria-label={t('pickFromMenu')}>
       {menu.map((item) => {
         const selected = selectedIds.includes(item.id)
         return (
-          <label
+          <button
             key={item.id}
+            type="button"
             className={`menu-option ${selected ? 'selected' : ''}`}
+            aria-pressed={selected}
+            onClick={() => onToggle(item.id)}
           >
-            <input
-              type="checkbox"
-              checked={selected}
-              onChange={() => onToggle(item.id)}
-            />
-            <span>
-              <strong>{item.name}</strong>
-              {item.isAlaCarte && (
-                <>
-                  {' '}
+            <span className="menu-check" aria-hidden>
+              {selected ? (
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+                  <path
+                    d="M5 12.5 9.5 17 19 7.5"
+                    stroke="currentColor"
+                    strokeWidth="2.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              ) : null}
+            </span>
+            <span className="menu-option-copy">
+              <span className="menu-option-title">
+                <strong>{item.name}</strong>
+                {item.isAlaCarte && (
                   <span className="chip chip-warm">{t('alaCarte')}</span>
-                </>
-              )}
-              <br />
-              <span className="menu-option-meta" style={{ fontSize: '0.85rem' }}>
+                )}
+                {selected && (
+                  <span className="menu-selected-tag">{t('selectedTag')}</span>
+                )}
+              </span>
+              <span className="menu-option-meta">
                 {item.category}
                 {item.description ? ` · ${item.description}` : ''}
               </span>
@@ -61,7 +73,7 @@ export function MenuPicker({
                   : formatMoney(item.price, currency, localeTag)}
               </span>
             </span>
-          </label>
+          </button>
         )
       })}
     </div>
