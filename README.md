@@ -31,6 +31,8 @@ npm run deploy
 
 That builds the SPA, applies D1 migrations remotely, and deploys the Worker + static assets. Wrangler will print the public `*.workers.dev` URL — share RSVP links from that host.
 
+Live deployment: https://round-gatherings.rtdw.workers.dev
+
 ## Notes
 
 Your browser only remembers which gathering IDs you’ve opened or created (so the home list stays personal). Anyone with an RSVP link can open that event and register.
