@@ -154,24 +154,126 @@ export function HomePage() {
       </section>
 
       {mode === 'choose' && (
-        <section className="home-about" aria-labelledby="home-about-title">
-          <h2 id="home-about-title">{t('homeAboutTitle')}</h2>
-          <p className="home-about-lede">{t('homeAboutLede')}</p>
-          <div className="home-about-grid">
-            <article>
-              <h3>{t('homeAboutMenuTitle')}</h3>
-              <p>{t('homeAboutMenuBody')}</p>
-            </article>
-            <article>
-              <h3>{t('homeAboutRsvpTitle')}</h3>
-              <p>{t('homeAboutRsvpBody')}</p>
-            </article>
-            <article>
-              <h3>{t('homeAboutMoneyTitle')}</h3>
-              <p>{t('homeAboutMoneyBody')}</p>
-            </article>
-          </div>
-        </section>
+        <>
+          <section className="home-flow" aria-labelledby="home-flow-title">
+            <h2 id="home-flow-title">{t('homeFlowTitle')}</h2>
+            <p className="home-section-lede">{t('homeFlowLede')}</p>
+            <ol className="home-flow-steps">
+              <li>
+                <span className="home-flow-num" aria-hidden>
+                  1
+                </span>
+                <div>
+                  <h3>{t('homeFlowStep1Title')}</h3>
+                  <p>{t('homeFlowStep1Body')}</p>
+                </div>
+              </li>
+              <li>
+                <span className="home-flow-num" aria-hidden>
+                  2
+                </span>
+                <div>
+                  <h3>{t('homeFlowStep2Title')}</h3>
+                  <p>{t('homeFlowStep2Body')}</p>
+                </div>
+              </li>
+              <li>
+                <span className="home-flow-num" aria-hidden>
+                  3
+                </span>
+                <div>
+                  <h3>{t('homeFlowStep3Title')}</h3>
+                  <p>{t('homeFlowStep3Body')}</p>
+                </div>
+              </li>
+            </ol>
+          </section>
+
+          <section className="home-glimpse" aria-labelledby="home-glimpse-title">
+            <div className="home-glimpse-copy">
+              <h2 id="home-glimpse-title">{t('homeGlimpseTitle')}</h2>
+              <p className="home-section-lede">{t('homeGlimpseLede')}</p>
+            </div>
+            <div className="home-glimpse-stage" aria-hidden>
+              <div className="home-glimpse-window">
+                <div className="home-glimpse-chrome">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+                <div className="home-glimpse-body">
+                  <p className="home-glimpse-kicker">{t('homeGlimpseMockKicker')}</p>
+                  <p className="home-glimpse-event">{t('homeGlimpseMockTitle')}</p>
+                  <p className="home-glimpse-meta">{t('homeGlimpseMockMeta')}</p>
+                  <ul className="home-glimpse-guests">
+                    <li>
+                      <span>{t('homeGlimpseGuest1')}</span>
+                      <em>{t('homeGlimpseGuest1Status')}</em>
+                    </li>
+                    <li>
+                      <span>{t('homeGlimpseGuest2')}</span>
+                      <em>{t('homeGlimpseGuest2Status')}</em>
+                    </li>
+                    <li>
+                      <span>{t('homeGlimpseGuest3')}</span>
+                      <em className="is-pending">{t('homeGlimpseGuest3Status')}</em>
+                    </li>
+                  </ul>
+                  <div className="home-glimpse-link">
+                    <span>{t('homeGlimpseMockLink')}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="home-about" aria-labelledby="home-about-title">
+            <h2 id="home-about-title">{t('homeAboutTitle')}</h2>
+            <p className="home-section-lede">{t('homeAboutLede')}</p>
+            <div className="home-about-grid">
+              <article>
+                <h3>{t('homeAboutMenuTitle')}</h3>
+                <p>{t('homeAboutMenuBody')}</p>
+              </article>
+              <article>
+                <h3>{t('homeAboutRsvpTitle')}</h3>
+                <p>{t('homeAboutRsvpBody')}</p>
+              </article>
+              <article>
+                <h3>{t('homeAboutMoneyTitle')}</h3>
+                <p>{t('homeAboutMoneyBody')}</p>
+              </article>
+            </div>
+          </section>
+
+          <section className="home-close" aria-labelledby="home-close-title">
+            <h2 id="home-close-title">{t('homeCloseTitle')}</h2>
+            <p className="home-section-lede">{t('homeCloseLede')}</p>
+            <div className="home-close-actions">
+              <button
+                className="btn btn-accent"
+                type="button"
+                onClick={() => {
+                  setMode('create')
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
+              >
+                {t('createEvent')}
+              </button>
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={() => {
+                  setMode('code')
+                  setAccessError(null)
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
+              >
+                {t('enterOrganizerCode')}
+              </button>
+            </div>
+          </section>
+        </>
       )}
 
       <footer className="site-footer">
