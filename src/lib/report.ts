@@ -28,6 +28,76 @@ export type CarteTally = {
   count: number
 }
 
+export type MenuTypeStat = {
+  key: string
+  label: string
+  count: number
+  /** Sum of priced selections in this type */
+  cost: number
+  /** True if any à la carte / unpriced picks are included */
+  hasVariable: boolean
+}
+
+/** Count fixed-menu picks by category (and include carte as its own type). */
+export function tallyMenuTypes(
+  gathering: Gathering,
+  carteTypeLabel = 'Carte',
+): MenuTypeStat[] {
+  const byKey = new Map<
+    string,
+    { label: string; count: number; cost: number; hasVariable: boolean }
+  >()
+
+  const bumpCategory = (category: string, price: number, isAlaCarte: boolean) => {
+    const label = category.trim() || 'Menu'
+    const key = `cat:${label.toLowerCase()}`
+    const current = byKey.get(key) || {
+      label,
+      count: 0,
+      cost: 0,
+      hasVariable: false,
+    }
+    current.count += 1
+    if (isAlaCarte) current.hasVariable = true
+    else current.cost += price
+    byKey.set(key, current)
+  }
+
+  const bumpCarte = () => {
+    const key = 'carte'
+    const current = byKey.get(key) || {
+      label: carteTypeLabel,
+      count: 0,
+      cost: 0,
+      hasVariable: true,
+    }
+    current.count += 1
+    current.hasVariable = true
+    byKey.set(key, current)
+  }
+
+  const consume = (menuItemIds: string[], carteItemIds: string[]) => {
+    for (const id of menuItemIds) {
+      const item = gathering.menu.find((m) => m.id === id)
+      if (!item) continue
+      bumpCategory(item.category || 'Menu', item.price || 0, Boolean(item.isAlaCarte))
+    }
+    for (const _id of carteItemIds || []) bumpCarte()
+  }
+
+  for (const a of gathering.attendees) {
+    if (a.isGroup && a.members?.length) {
+      for (const m of a.members) consume(m.menuItemIds, m.carteItemIds || [])
+    } else {
+      consume(a.menuItemIds, a.carteItemIds || [])
+    }
+  }
+
+  return [...byKey.entries()]
+    .map(([key, row]) => ({ key, ...row }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+}
+
 function personFromSolo(a: Attendee, gathering: Gathering): ReportPerson {
   return {
     id: a.id,
@@ -189,6 +259,75 @@ function carteTallyRows(rows: CarteTally[]): string {
   `
 }
 
+function menuTypeChart(
+  rows: MenuTypeStat[],
+  labels: {
+    chartTitle: string
+    qty: string
+    avgCost: string
+    avgPerPerson: string
+    variable: string
+    noData: string
+  },
+  currency: string,
+  localeTag: string,
+  peopleCount: number,
+  totalOwed: number,
+): string {
+  if (rows.length === 0) {
+    return `
+      <section class="section chart-section">
+        <h2>${escapeHtml(labels.chartTitle)}</h2>
+        <p class="empty">${escapeHtml(labels.noData)}</p>
+      </section>`
+  }
+
+  const maxCount = Math.max(...rows.map((r) => r.count), 1)
+  const avgPerson = peopleCount > 0 ? totalOwed / peopleCount : 0
+
+  const bars = rows
+    .map((row) => {
+      const pct = Math.max(6, Math.round((row.count / maxCount) * 100))
+      const avg =
+        row.count > 0 && row.cost > 0 ? row.cost / row.count : null
+      const avgText = avg
+        ? formatMoney(avg, currency, localeTag)
+        : row.hasVariable
+          ? labels.variable
+          : '—'
+      return `
+        <div class="chart-row">
+          <div class="chart-label">${escapeHtml(row.label)}</div>
+          <div class="chart-track" aria-hidden="true">
+            <div class="chart-bar" style="width:${pct}%"></div>
+          </div>
+          <div class="chart-meta">
+            <strong>${row.count}</strong>
+            <span>${escapeHtml(labels.qty)}</span>
+            <em>${escapeHtml(avgText)}</em>
+          </div>
+        </div>`
+    })
+    .join('')
+
+  return `
+    <section class="section chart-section">
+      <h2>${escapeHtml(labels.chartTitle)}</h2>
+      <div class="cards chart-summary">
+        <div class="card">
+          <span>${escapeHtml(labels.avgPerPerson)}</span>
+          <strong>${escapeHtml(formatMoney(avgPerson, currency, localeTag))}${
+            rows.some((r) => r.hasVariable) ? '+' : ''
+          }</strong>
+        </div>
+      </div>
+      <p class="chart-legend muted">${escapeHtml(labels.avgCost)}</p>
+      <div class="chart" role="img" aria-label="${escapeHtml(labels.chartTitle)}">
+        ${bars}
+      </div>
+    </section>`
+}
+
 export type ReportLabels = {
   title: string
   generated: string
@@ -213,6 +352,11 @@ export type ReportLabels = {
   dish: string
   qty: string
   noCartePicks: string
+  menuTypeChart: string
+  avgCost: string
+  avgPerPerson: string
+  priceVariable: string
+  noMenuTypeData: string
 }
 
 export function buildEventReportHtml(
@@ -227,6 +371,7 @@ export function buildEventReportHtml(
   const owed = totals.owed
   const outstanding = totals.outstanding
   const carteTally = tallyCartePicks(gathering)
+  const menuTypes = tallyMenuTypes(gathering, labels.carte)
   const when = [
     formatDate(gathering.date, localeTag, labels.dateTbd),
     gathering.time,
@@ -246,6 +391,22 @@ export function buildEventReportHtml(
 
   const showCarteSection =
     Boolean(gathering.carteApproved) && (gathering.carteItems || []).length > 0
+
+  const chartHtml = menuTypeChart(
+    menuTypes,
+    {
+      chartTitle: labels.menuTypeChart,
+      qty: labels.qty,
+      avgCost: labels.avgCost,
+      avgPerPerson: labels.avgPerPerson,
+      variable: labels.priceVariable,
+      noData: labels.noMenuTypeData,
+    },
+    gathering.currency,
+    localeTag,
+    people.length,
+    owed,
+  )
 
   return `<!DOCTYPE html>
 <html lang="${escapeHtml(localeTag)}">
@@ -404,6 +565,61 @@ export function buildEventReportHtml(
     .empty { color: #5d726c; }
     .section { margin-bottom: 0.35rem; }
     .count { color: #5d726c; font-weight: 600; font-size: 0.92rem; }
+    .chart-section { margin-top: 0.5rem; }
+    .chart-summary { margin: 0.75rem 0 0.5rem; max-width: 280px; }
+    .chart-legend { margin: 0 0 0.65rem; font-size: 0.85rem; }
+    .chart {
+      display: grid;
+      gap: 0.55rem;
+      padding: 0.85rem 0.9rem;
+      background: #fff;
+      border: 1px solid rgba(6,40,35,0.1);
+      border-radius: 14px;
+    }
+    .chart-row {
+      display: grid;
+      grid-template-columns: minmax(4.5rem, 7.5rem) 1fr auto;
+      gap: 0.55rem 0.7rem;
+      align-items: center;
+    }
+    .chart-label {
+      font-size: 0.88rem;
+      font-weight: 700;
+      word-break: break-word;
+    }
+    .chart-track {
+      height: 0.7rem;
+      border-radius: 999px;
+      background: #e4eeea;
+      overflow: hidden;
+    }
+    .chart-bar {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #006b5f, #3ecf9a);
+      min-width: 0.4rem;
+    }
+    .chart-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.05rem;
+      min-width: 4.5rem;
+      text-align: right;
+      font-size: 0.72rem;
+      color: #5d726c;
+    }
+    .chart-meta strong {
+      font-size: 1rem;
+      color: #004f46;
+      line-height: 1.1;
+    }
+    .chart-meta em {
+      font-style: normal;
+      font-weight: 700;
+      color: #1a3d37;
+      font-size: 0.8rem;
+    }
     @media (min-width: 640px) {
       .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .wrap { padding: 1.5rem 1.15rem 3rem; }
@@ -416,11 +632,17 @@ export function buildEventReportHtml(
       .person-fields > div:nth-child(2n) { border-right: 0; }
       .person-contact { grid-column: 1 / -1; border-right: 0 !important; }
     }
+    @media (max-width: 520px) {
+      .chart-row {
+        grid-template-columns: 1fr auto;
+      }
+      .chart-track { grid-column: 1 / -1; order: 3; }
+    }
     @media print {
       body { background: #fff; }
       .hint { display: none; }
       .wrap { max-width: none; padding: 0; }
-      .card, .person, .tally-list li { break-inside: avoid; }
+      .card, .person, .tally-list li, .chart { break-inside: avoid; }
     }
   </style>
 </head>
@@ -441,6 +663,8 @@ export function buildEventReportHtml(
       <div class="card"><span>${escapeHtml(labels.menuTotal)}</span><strong>${escapeHtml(formatMoney(owed, gathering.currency, localeTag))}</strong></div>
       <div class="card"><span>${escapeHtml(labels.stillDue)}</span><strong>${escapeHtml(formatMoney(outstanding, gathering.currency, localeTag))}</strong></div>
     </div>
+
+    ${chartHtml}
 
     ${
       showCarteSection

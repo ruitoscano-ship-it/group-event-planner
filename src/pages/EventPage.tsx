@@ -359,6 +359,11 @@ export function EventPage() {
         dish: t('reportDish'),
         qty: t('reportQty'),
         noCartePicks: t('reportNoCartePicks'),
+        menuTypeChart: t('reportMenuTypeChart'),
+        avgCost: t('reportAvgCostHint'),
+        avgPerPerson: t('reportAvgPerPerson'),
+        priceVariable: t('priceVariable'),
+        noMenuTypeData: t('reportNoMenuTypeData'),
       },
       localeTag,
     )
