@@ -72,6 +72,7 @@ export function EventPage() {
   const [detailsBusy, setDetailsBusy] = useState(false)
   const [detailsMsg, setDetailsMsg] = useState<string | null>(null)
   const [detailsError, setDetailsError] = useState(false)
+  const [editingDetails, setEditingDetails] = useState(false)
   const [menuMsg, setMenuMsg] = useState<string | null>(null)
   const [editingGuestId, setEditingGuestId] = useState<string | null>(null)
   const [menuForm, setMenuForm] = useState({
@@ -251,12 +252,28 @@ export function EventPage() {
         organizerPhone: detailsForm.organizerPhone.trim(),
       })
       setDetailsMsg(pickFeedback(t, [...detailsSavedKeys]))
+      setEditingDetails(false)
     } catch (err) {
       setDetailsError(true)
       setDetailsMsg(err instanceof Error ? err.message : t('detailsSaveFailed'))
     } finally {
       setDetailsBusy(false)
     }
+  }
+
+  function cancelEditDetails() {
+    if (!gathering) return
+    setDetailsForm({
+      date: gathering.date || '',
+      time: gathering.time || '',
+      location: gathering.location || '',
+      organizerName: gathering.organizerName || '',
+      organizerEmail: gathering.organizerEmail || '',
+      organizerPhone: gathering.organizerPhone || '',
+    })
+    setEditingDetails(false)
+    setDetailsMsg(null)
+    setDetailsError(false)
   }
 
   async function onAddMenu(e: FormEvent) {
@@ -451,8 +468,25 @@ export function EventPage() {
       </div>
 
       <section className="panel" style={{ marginBottom: '1rem' }}>
-        <h2>{t('editDetails')}</h2>
-        <p className="sub">{t('editDetailsSub')}</p>
+        <div className="details-panel-head">
+          <div>
+            <h2>{t('editDetails')}</h2>
+            <p className="sub">{t('editDetailsSub')}</p>
+          </div>
+          {!editingDetails && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setEditingDetails(true)
+                setDetailsMsg(null)
+                setDetailsError(false)
+              }}
+            >
+              {t('editGuest')}
+            </button>
+          )}
+        </div>
         {detailsMsg && (
           <div
             className={`feedback-banner ${detailsError ? 'error' : ''}`}
@@ -461,76 +495,108 @@ export function EventPage() {
             {detailsMsg}
           </div>
         )}
-        <form onSubmit={(e) => void onSaveDetails(e)}>
-          <div className="form-grid">
-            <label>
-              {t('date')}
-              <input
-                type="date"
-                value={detailsForm.date}
-                onChange={(e) => setDetailsForm({ ...detailsForm, date: e.target.value })}
-              />
-            </label>
-            <label>
-              {t('time')}
-              <input
-                type="time"
-                value={detailsForm.time}
-                onChange={(e) => setDetailsForm({ ...detailsForm, time: e.target.value })}
-              />
-            </label>
-            <label className="full">
-              {t('location')}
-              <input
-                value={detailsForm.location}
-                onChange={(e) =>
-                  setDetailsForm({ ...detailsForm, location: e.target.value })
-                }
-                placeholder={t('placeholderLocation')}
-              />
-            </label>
-            <label>
-              {t('organizerName')}
-              <input
-                value={detailsForm.organizerName}
-                onChange={(e) =>
-                  setDetailsForm({ ...detailsForm, organizerName: e.target.value })
-                }
-                placeholder={t('organizerNamePlaceholder')}
-                autoComplete="name"
-              />
-            </label>
-            <label>
-              {t('organizerEmail')}
-              <input
-                type="email"
-                value={detailsForm.organizerEmail}
-                onChange={(e) =>
-                  setDetailsForm({ ...detailsForm, organizerEmail: e.target.value })
-                }
-                placeholder={t('placeholderEmail')}
-                autoComplete="email"
-              />
-            </label>
-            <label className="full">
-              {t('organizerPhone')}
-              <input
-                type="tel"
-                value={detailsForm.organizerPhone}
-                onChange={(e) =>
-                  setDetailsForm({ ...detailsForm, organizerPhone: e.target.value })
-                }
-                placeholder={t('placeholderPhone')}
-                autoComplete="tel"
-              />
-            </label>
-          </div>
-          <div className="form-actions">
-            <button className="btn btn-accent" type="submit" disabled={detailsBusy}>
-              {detailsBusy ? t('saving') : t('saveDetails')}
-            </button>
-          </div>
-        </form>
+
+        {!editingDetails ? (
+          <dl className="details-summary">
+            <div>
+              <dt>{t('date')}</dt>
+            </div>
+            <div>
+              <dt>{t('time')}</dt>
+            </div>
+            <div className="full">
+              <dt>{t('location')}</dt>
+            </div>
+            <div>
+              <dt>{t('organizerName')}</dt>
+            </div>
+            <div>
+              <dt>{t('organizerEmail')}</dt>
+            </div>
+            <div className="full">
+              <dt>{t('organizerPhone')}</dt>
+            </div>
+          </dl>
+        ) : (
+          <form onSubmit={(e) => void onSaveDetails(e)}>
+            <div className="form-grid">
+              <label>
+                {t('date')}
+                <input
+                  type="date"
+                  value={detailsForm.date}
+                  onChange={(e) => setDetailsForm({ ...detailsForm, date: e.target.value })}
+                />
+              </label>
+              <label>
+                {t('time')}
+                <input
+                  type="time"
+                  value={detailsForm.time}
+                  onChange={(e) => setDetailsForm({ ...detailsForm, time: e.target.value })}
+                />
+              </label>
+              <label className="full">
+                {t('location')}
+                <input
+                  value={detailsForm.location}
+                  onChange={(e) =>
+                    setDetailsForm({ ...detailsForm, location: e.target.value })
+                  }
+                  placeholder={t('placeholderLocation')}
+                />
+              </label>
+              <label>
+                {t('organizerName')}
+                <input
+                  value={detailsForm.organizerName}
+                  onChange={(e) =>
+                    setDetailsForm({ ...detailsForm, organizerName: e.target.value })
+                  }
+                  placeholder={t('organizerNamePlaceholder')}
+                  autoComplete="name"
+                />
+              </label>
+              <label>
+                {t('organizerEmail')}
+                <input
+                  type="email"
+                  value={detailsForm.organizerEmail}
+                  onChange={(e) =>
+                    setDetailsForm({ ...detailsForm, organizerEmail: e.target.value })
+                  }
+                  placeholder={t('placeholderEmail')}
+                  autoComplete="email"
+                />
+              </label>
+              <label className="full">
+                {t('organizerPhone')}
+                <input
+                  type="tel"
+                  value={detailsForm.organizerPhone}
+                  onChange={(e) =>
+                    setDetailsForm({ ...detailsForm, organizerPhone: e.target.value })
+                  }
+                  placeholder={t('placeholderPhone')}
+                  autoComplete="tel"
+                />
+              </label>
+            </div>
+            <div className="form-actions">
+              <button className="btn btn-accent" type="submit" disabled={detailsBusy}>
+                {detailsBusy ? t('saving') : t('saveDetails')}
+              </button>
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={cancelEditDetails}
+                disabled={detailsBusy}
+              >
+                {t('cancel')}
+              </button>
+            </div>
+          </form>
+        )}
       </section>
 
       <div className="summary-strip">
