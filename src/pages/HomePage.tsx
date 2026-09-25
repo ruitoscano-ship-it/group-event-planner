@@ -67,7 +67,19 @@ export function HomePage() {
       </header>
 
       <section className="landing">
-        <div className="landing-visual" role="img" aria-label={t('brandAria')} />
+          <div
+            className="landing-visual"
+            role="img"
+            aria-label={t('brandAria')}
+          >
+            <img
+              className="landing-visual-img"
+              src="/landing-hero.jpg"
+              alt=""
+              decoding="async"
+              fetchPriority="high"
+            />
+          </div>
         <div className="landing-copy">
           <p className="brand landing-brand">
             Round<span>.</span>

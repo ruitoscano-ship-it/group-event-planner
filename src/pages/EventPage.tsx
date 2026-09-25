@@ -584,9 +584,6 @@ export function EventPage() {
         </Link>
         <div className="nav-actions">
           <LanguageSwitcher />
-          <Link viewTransition className="btn btn-ghost btn-sm hide-on-narrow" to={`/rsvp/${gathering.id}`}>
-            {t('openRsvp')}
-          </Link>
           <button
             className="btn btn-danger btn-sm"
             type="button"
@@ -603,9 +600,9 @@ export function EventPage() {
         </div>
       </header>
 
-      <div className="page-header">
-        <div>
-          <div className="meta" style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.6rem' }}>
+      <section className="event-stage">
+        <div className="event-stage-copy">
+          <div className="event-stage-meta">
             <span className="chip">{typeLabel}</span>
             <span className="chip chip-warm">
               {formatDate(gathering.date, localeTag, t('dateTbd'))}
@@ -613,20 +610,65 @@ export function EventPage() {
             {gathering.time && <span className="chip chip-muted">{gathering.time}</span>}
           </div>
           <h1>{gathering.title}</h1>
-          <p className="lede">
+          <p className="event-stage-where">
             {gathering.location || t('locationTbd')}
-            {gathering.notes ? ` — ${gathering.notes}` : ''}
           </p>
-          {totals.hasVariable && <p className="lede">{t('hasVariableNote')}</p>}
+          {gathering.notes && <p className="event-stage-notes">{gathering.notes}</p>}
+          {totals.hasVariable && (
+            <p className="event-stage-notes">{t('hasVariableNote')}</p>
+          )}
         </div>
-      </div>
 
-      <section className="panel" style={{ marginBottom: '1rem' }}>
-        <div className="details-panel-head">
-          <div>
-            <h2>{t('editDetails')}</h2>
-            <p className="sub">{t('editDetailsSub')}</p>
+        <div
+          className={`event-stage-share ${coachStep === 'share' || coachStep === 'code' ? 'coach-target' : ''}`}
+          ref={shareBoxRef}
+        >
+          <div className="event-stage-share-label">
+            <strong>{t('selfServiceLink')}</strong>
+            <code>{rsvpUrl}</code>
           </div>
+          <div className="event-stage-share-actions">
+            <button className="btn btn-sm btn-accent" type="button" onClick={() => void copyLink()}>
+              {copied ? t('copied') : t('copyLink')}
+            </button>
+            <Link viewTransition className="btn btn-sm btn-ghost" to={`/rsvp/${gathering.id}`}>
+              {t('openRsvp')}
+            </Link>
+            <button className="btn btn-sm btn-ghost" type="button" onClick={openFullReport}>
+              {t('openEventReport')}
+            </button>
+          </div>
+        </div>
+
+        <div className="event-stage-metrics" aria-label={t('peopleTotal')}>
+          <div>
+            <span>{t('peopleTotal')}</span>
+            <strong>{totals.guestCount}</strong>
+          </div>
+          <div>
+            <span>{t('invites')}</span>
+            <strong>{totals.inviteCount}</strong>
+          </div>
+          <div>
+            <span>{t('menuTotal')}</span>
+            <strong>{formatMoney(totals.owed, gathering.currency, localeTag)}</strong>
+          </div>
+          <div>
+            <span>{t('stillDue')}</span>
+            <strong>{formatMoney(totals.outstanding, gathering.currency, localeTag)}</strong>
+          </div>
+        </div>
+      </section>
+
+      <details className="panel event-details-fold" style={{ marginBottom: '1rem' }}>
+        <summary>
+          <span>
+            <strong>{t('editDetails')}</strong>
+            <em className="sub">{t('editDetailsSub')}</em>
+          </span>
+        </summary>
+        <div className="details-panel-head" style={{ marginTop: '0.85rem' }}>
+          <div />
           {!editingDetails && (
             <button
               type="button"
@@ -761,48 +803,7 @@ export function EventPage() {
             </div>
           </form>
         )}
-      </section>
-
-      <div className="summary-strip">
-        <div className="summary-tile">
-          <span>{t('invites')}</span>
-          <strong>{totals.inviteCount}</strong>
-        </div>
-        <div className="summary-tile">
-          <span>{t('peopleTotal')}</span>
-          <strong>{totals.guestCount}</strong>
-        </div>
-        <div className="summary-tile">
-          <span>{t('adultsCount')}</span>
-          <strong>{totals.adults}</strong>
-        </div>
-        <div className="summary-tile">
-          <span>{t('childrenCount')}</span>
-          <strong>{totals.children}</strong>
-        </div>
-        <div className="summary-tile">
-          <span>{t('menuTotal')}</span>
-          <strong>{formatMoney(totals.owed, gathering.currency, localeTag)}</strong>
-        </div>
-        <div className="summary-tile">
-          <span>{t('stillDue')}</span>
-          <strong>{formatMoney(totals.outstanding, gathering.currency, localeTag)}</strong>
-        </div>
-      </div>
-
-      <div
-        className={`share-box ${coachStep === 'share' || coachStep === 'code' ? 'coach-target' : ''}`}
-        ref={shareBoxRef}
-      >
-        <strong>{t('selfServiceLink')}</strong>
-        <code>{rsvpUrl}</code>
-        <button className="btn btn-sm btn-accent" type="button" onClick={() => void copyLink()}>
-          {copied ? t('copied') : t('copyLink')}
-        </button>
-        <button className="btn btn-sm btn-ghost" type="button" onClick={openFullReport}>
-          {t('openEventReport')}
-        </button>
-      </div>
+      </details>
 
       {organizerCode && (
         <section
