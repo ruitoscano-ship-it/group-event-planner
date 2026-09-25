@@ -258,6 +258,10 @@ export function AdminPage() {
               <strong>{stats.createdLast7Days}</strong>
             </div>
             <div className="admin-stat">
+              <span>{t('adminStatRsvps')}</span>
+              <strong>{stats.attendeesTotal}</strong>
+            </div>
+            <div className="admin-stat admin-stat-emphasis">
               <span>{t('adminStatPeople')}</span>
               <strong>{stats.peopleTotal}</strong>
             </div>
@@ -297,7 +301,7 @@ export function AdminPage() {
                   <th>{t('adminColEvent')}</th>
                   <th>{t('adminColWhen')}</th>
                   <th>{t('adminColCreated')}</th>
-                  <th>{t('adminColGuests')}</th>
+                  <th>{t('adminColPeople')}</th>
                   <th>{t('adminColStatus')}</th>
                   <th>{t('adminColActions')}</th>
                 </tr>
@@ -327,11 +331,13 @@ export function AdminPage() {
                       {new Date(row.createdAt).toLocaleString(localeTag)}
                     </td>
                     <td>
-                      {row.attendeeCount}
-                      <span className="admin-meta">
-                        {' '}
-                        / {row.peopleCount} {t('peopleLabel')}
-                      </span>
+                      <strong className="admin-people-count">{row.peopleCount}</strong>
+                      <div className="admin-meta">
+                        {t('adminPeopleFromRsvps', {
+                          people: row.peopleCount,
+                          rsvps: row.attendeeCount,
+                        })}
+                      </div>
                     </td>
                     <td>
                       {row.archivedAt ? (
@@ -381,6 +387,25 @@ export function AdminPage() {
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={3}>
+                    <strong>{t('adminFilterTotal')}</strong>
+                  </td>
+                  <td>
+                    <strong className="admin-people-count">
+                      {events.reduce((sum, row) => sum + row.peopleCount, 0)}
+                    </strong>
+                    <div className="admin-meta">
+                      {t('adminPeopleFromRsvps', {
+                        people: events.reduce((sum, row) => sum + row.peopleCount, 0),
+                        rsvps: events.reduce((sum, row) => sum + row.attendeeCount, 0),
+                      })}
+                    </div>
+                  </td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
             </table>
           )}
         </div>

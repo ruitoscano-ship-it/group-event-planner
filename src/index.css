@@ -3102,9 +3102,24 @@ body[data-menu-sheet-open='1'] {
 
 .admin-stats {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.65rem;
   margin-bottom: 1rem;
+}
+
+.admin-stat-emphasis {
+  background: linear-gradient(135deg, rgba(183, 228, 216, 0.55), rgba(255, 255, 255, 0.95));
+  border-color: rgba(0, 79, 70, 0.18);
+}
+
+.admin-people-count {
+  font-size: 1.15rem;
+  color: var(--green-deep);
+}
+
+.admin-table tfoot td {
+  background: rgba(0, 79, 70, 0.04);
+  border-bottom: none;
 }
 
 .admin-stat {

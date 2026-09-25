@@ -368,11 +368,23 @@ function isPastEvent(gathering: Gathering): boolean {
   return date < todayIsoDate()
 }
 
+function attendeePartySize(a: {
+  isGroup?: boolean
+  groupSize?: number
+  members?: Array<unknown>
+}): number {
+  if (a.isGroup) {
+    if (a.members?.length) return a.members.length
+    return Math.max(1, Number(a.groupSize) || 1)
+  }
+  return 1
+}
+
 function partyHeadcount(gathering: Gathering): number {
-  return (gathering.attendees || []).reduce((sum, a) => {
-    if (a.isGroup && a.members?.length) return sum + a.members.length
-    return sum + Math.max(1, Number(a.groupSize) || 1)
-  }, 0)
+  return (gathering.attendees || []).reduce(
+    (sum, a) => sum + attendeePartySize(a),
+    0,
+  )
 }
 
 type AdminEventRow = {
