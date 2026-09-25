@@ -80,6 +80,12 @@ export type Gathering = {
   createdAt: string
 }
 
+/** Returned only from create / unlock — includes the manage code. */
+export type GatheringAccess = {
+  gathering: Gathering
+  organizerCode: string
+}
+
 export type GatheringInput = Omit<
   Gathering,
   | 'id'

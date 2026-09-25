@@ -11,7 +11,34 @@ export const translations = {
     syncErrorTitle: 'Não foi possível sincronizar',
     retry: 'Tentar novamente',
     createGathering: 'Criar encontro',
-    createGatheringSub: 'Comece pelos básicos — depois adiciona o menu.',
+    createGatheringSub:
+      'Comece pelos básicos — depois guarda o código do organizador para gerir o evento.',
+    accessWithCode: 'Abrir com código',
+    accessWithCodeSub:
+      'Tem o código do organizador? Introduza-o para gerir o encontro neste dispositivo.',
+    organizerCode: 'Código do organizador',
+    organizerCodePlaceholder: 'ABCD-EFGH',
+    openWithCode: 'Abrir encontro',
+    accessCodeFailed: 'Código inválido ou encontro não encontrado',
+    unlockEventTitle: 'Desbloquear gestão',
+    unlockEventSub: 'Introduza o código do organizador para gerir “{title}”.',
+    unlockEvent: 'Desbloquear',
+    unlockEventRsvpHint: 'É convidado? Use o link de RSVP:',
+    organizerCodeTitle: 'O seu código de gestão',
+    organizerCodeNewSub:
+      'Guarde este código — é a chave para editar o evento, ver convidados e gerir tudo. Não partilhe no link de RSVP.',
+    organizerCodeSub:
+      'Use este código noutro dispositivo para voltar a aceder à gestão do evento.',
+    copyCode: 'Copiar código',
+    codeSavedDismiss: 'Já guardei',
+    emailRequired: 'Email',
+    rsvpNeedEmail: 'Indique o email — identifica o seu RSVP único neste evento.',
+    rsvpUpdatedMsg: 'RSVP atualizado',
+    rsvpDoneUpdatedSub:
+      'Atualizámos a inscrição deste email. Cada email só tem um RSVP por evento.',
+    rsvpUpdateMine: 'Atualizar o meu RSVP',
+    rsvpUniqueHint:
+      'Um RSVP por email neste evento. Se já se inscreveu, confirme de novo com o mesmo email para atualizar.',
     title: 'Título',
     type: 'Tipo',
     currency: 'Moeda',
@@ -261,7 +288,8 @@ export const translations = {
     rsvpNeedMenu: 'Escolha o menu (ou o pedido da ementa) para continuar',
     rsvpContact: 'Contacto',
     rsvpDoneKicker: 'Confirmado',
-    rsvpDoneSub: 'O organizador já vê a sua inscrição. Pode adicionar outra pessoa se precisar.',
+    rsvpDoneSub:
+      'O organizador já vê a sua inscrição. Cada email tem um RSVP único — confirme de novo com o mesmo email para atualizar.',
     rsvpAnother: 'Registar outra pessoa',
     guestName: 'Nome do convidado',
     registeringSomeoneElse: 'Estou a registar outra pessoa',
@@ -302,7 +330,34 @@ export const translations = {
     syncErrorTitle: 'Couldn’t sync',
     retry: 'Retry',
     createGathering: 'Create gathering',
-    createGatheringSub: 'Add the basics first — you can upload the menu next.',
+    createGatheringSub:
+      'Add the basics first — then save the organizer code to manage the event.',
+    accessWithCode: 'Open with code',
+    accessWithCodeSub:
+      'Have the organizer code? Enter it to manage the gathering on this device.',
+    organizerCode: 'Organizer code',
+    organizerCodePlaceholder: 'ABCD-EFGH',
+    openWithCode: 'Open gathering',
+    accessCodeFailed: 'Invalid code or gathering not found',
+    unlockEventTitle: 'Unlock management',
+    unlockEventSub: 'Enter the organizer code to manage “{title}”.',
+    unlockEvent: 'Unlock',
+    unlockEventRsvpHint: 'Are you a guest? Use the RSVP link:',
+    organizerCodeTitle: 'Your management code',
+    organizerCodeNewSub:
+      'Save this code — it’s the key to edit the event, see guests, and manage everything. Don’t share it in the RSVP link.',
+    organizerCodeSub:
+      'Use this code on another device to regain organizer access.',
+    copyCode: 'Copy code',
+    codeSavedDismiss: 'I’ve saved it',
+    emailRequired: 'Email',
+    rsvpNeedEmail: 'Enter your email — it identifies your unique RSVP for this event.',
+    rsvpUpdatedMsg: 'RSVP updated',
+    rsvpDoneUpdatedSub:
+      'We updated the registration for this email. Each email has one RSVP per event.',
+    rsvpUpdateMine: 'Update my RSVP',
+    rsvpUniqueHint:
+      'One RSVP per email for this event. If you already registered, submit again with the same email to update.',
     title: 'Title',
     type: 'Type',
     currency: 'Currency',
@@ -553,7 +608,8 @@ export const translations = {
     rsvpNeedMenu: 'Pick a menu (or carte order) to continue',
     rsvpContact: 'Contact',
     rsvpDoneKicker: 'You’re in',
-    rsvpDoneSub: 'The organizer can see your registration. Add someone else if you need to.',
+    rsvpDoneSub:
+      'The organizer can see your registration. Each email has one RSVP — submit again with the same email to update.',
     rsvpAnother: 'Register someone else',
     guestName: 'Guest name',
     registeringSomeoneElse: 'I’m registering someone else',

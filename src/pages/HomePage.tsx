@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { useI18n } from '../i18n/I18nContext'
+import { formatOrganizerCode } from '../lib/organizerAccess'
 import { formatDate, gatheringTotals } from '../lib/money'
 import { useGatherings } from '../store/GatheringsContext'
 import type { GatheringInput } from '../types'
@@ -20,13 +21,17 @@ const emptyForm: GatheringInput = {
 }
 
 export function HomePage() {
-  const { gatherings, createGathering, loading, error, refresh } = useGatherings()
+  const { gatherings, createGathering, unlockWithCode, loading, error, refresh } =
+    useGatherings()
   const { t, localeTag } = useI18n()
   const navigate = useNavigate()
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<GatheringInput>(emptyForm)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [accessCode, setAccessCode] = useState('')
+  const [accessBusy, setAccessBusy] = useState(false)
+  const [accessError, setAccessError] = useState<string | null>(null)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -45,11 +50,27 @@ export function HomePage() {
       })
       setForm(emptyForm)
       setShowForm(false)
-      navigate(`/events/${created.id}`, { viewTransition: true })
+      navigate(`/events/${created.gathering.id}?created=1`, { viewTransition: true })
     } catch (err) {
       setFormError(err instanceof Error ? err.message : t('createFailed'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function onAccess(e: FormEvent) {
+    e.preventDefault()
+    if (!accessCode.trim() || accessBusy) return
+    setAccessBusy(true)
+    setAccessError(null)
+    try {
+      const result = await unlockWithCode(accessCode.trim())
+      setAccessCode('')
+      navigate(`/events/${result.gathering.id}`, { viewTransition: true })
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : t('accessCodeFailed'))
+    } finally {
+      setAccessBusy(false)
     }
   }
 
@@ -98,6 +119,32 @@ export function HomePage() {
         </div>
       )}
 
+      <section className="panel" style={{ marginBottom: '1rem' }}>
+        <h2>{t('accessWithCode')}</h2>
+        <p className="sub">{t('accessWithCodeSub')}</p>
+        {accessError && <p className="allergy">{accessError}</p>}
+        <form onSubmit={(e) => void onAccess(e)}>
+          <div className="form-grid">
+            <label className="full">
+              {t('organizerCode')}
+              <input
+                value={accessCode}
+                onChange={(e) => setAccessCode(formatOrganizerCode(e.target.value))}
+                placeholder={t('organizerCodePlaceholder')}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </label>
+          </div>
+          <div className="form-actions">
+            <button className="btn btn-accent" type="submit" disabled={accessBusy}>
+              {accessBusy ? t('saving') : t('openWithCode')}
+            </button>
+          </div>
+        </form>
+      </section>
+
       {showForm && (
         <section className="section panel">
           <h2>{t('createGathering')}</h2>
@@ -133,15 +180,10 @@ export function HomePage() {
               </label>
               <label>
                 {t('currency')}
-                <select
+                <input
                   value={form.currency}
                   onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                >
-                  <option value="EUR">EUR</option>
-                  <option value="USD">USD</option>
-                  <option value="GBP">GBP</option>
-                  <option value="CHF">CHF</option>
-                </select>
+                />
               </label>
               <label>
                 {t('date')}
@@ -173,6 +215,7 @@ export function HomePage() {
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   placeholder={t('placeholderNotes')}
+                  rows={3}
                 />
               </label>
               <label>
@@ -181,7 +224,6 @@ export function HomePage() {
                   value={form.organizerName || ''}
                   onChange={(e) => setForm({ ...form, organizerName: e.target.value })}
                   placeholder={t('organizerNamePlaceholder')}
-                  autoComplete="name"
                 />
               </label>
               <label>
@@ -190,31 +232,23 @@ export function HomePage() {
                   type="email"
                   value={form.organizerEmail || ''}
                   onChange={(e) => setForm({ ...form, organizerEmail: e.target.value })}
-                  placeholder={t('placeholderEmail')}
-                  autoComplete="email"
                 />
               </label>
-              <label className="full">
+              <label>
                 {t('organizerPhone')}
                 <input
                   type="tel"
                   value={form.organizerPhone || ''}
                   onChange={(e) => setForm({ ...form, organizerPhone: e.target.value })}
-                  placeholder={t('placeholderPhone')}
-                  autoComplete="tel"
                 />
               </label>
             </div>
             <div className="form-actions">
+              <button className="btn btn-ghost" type="button" onClick={() => setShowForm(false)}>
+                {t('cancel')}
+              </button>
               <button className="btn btn-accent" type="submit" disabled={saving}>
                 {saving ? t('saving') : t('saveAndAddMenu')}
-              </button>
-              <button
-                className="btn btn-ghost"
-                type="button"
-                onClick={() => setShowForm(false)}
-              >
-                {t('cancel')}
               </button>
             </div>
           </form>

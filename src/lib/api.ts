@@ -2,18 +2,28 @@ import type {
   Attendee,
   CarteItem,
   Gathering,
+  GatheringAccess,
   GatheringInput,
   MenuItem,
   MessageInput,
 } from '../types'
+import { loadOrganizerCode } from './organizerAccess'
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit & { organizerCode?: string | null },
+): Promise<T> {
+  const { organizerCode, ...rest } = init ?? {}
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(rest.headers as Record<string, string> | undefined),
+  }
+  if (organizerCode) {
+    headers['X-Organizer-Code'] = organizerCode
+  }
   const res = await fetch(path, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
+    ...rest,
+    headers,
   })
   if (!res.ok) {
     let message = `Request failed (${res.status})`
@@ -29,6 +39,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T
 }
 
+function withCode(gatheringId: string, code?: string | null) {
+  return code ?? loadOrganizerCode(gatheringId)
+}
+
+export type AddAttendeeResult = {
+  gathering: Gathering
+  attendeeId: string
+  updated: boolean
+}
+
 export const api = {
   listGatherings(ids: string[]) {
     if (ids.length === 0) return Promise.resolve([] as Gathering[])
@@ -39,48 +59,90 @@ export const api = {
     return request<Gathering>(`/api/gatherings/${encodeURIComponent(id)}`)
   },
   createGathering(input: GatheringInput) {
-    return request<Gathering>('/api/gatherings', {
+    return request<GatheringAccess>('/api/gatherings', {
       method: 'POST',
       body: JSON.stringify(input),
     })
   },
-  updateGathering(gathering: Gathering) {
+  accessByCode(code: string) {
+    return request<GatheringAccess>('/api/access', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    })
+  },
+  unlockGathering(gatheringId: string, code: string) {
+    return request<GatheringAccess>(
+      `/api/gatherings/${encodeURIComponent(gatheringId)}/unlock`,
+      { method: 'POST', body: JSON.stringify({ code }) },
+    )
+  },
+  updateGathering(gathering: Gathering, organizerCode?: string | null) {
     return request<Gathering>(`/api/gatherings/${encodeURIComponent(gathering.id)}`, {
       method: 'PUT',
       body: JSON.stringify(gathering),
+      organizerCode: withCode(gathering.id, organizerCode),
     })
   },
-  deleteGathering(id: string) {
+  deleteGathering(id: string, organizerCode?: string | null) {
     return request<{ ok: boolean }>(`/api/gatherings/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+      organizerCode: withCode(id, organizerCode),
     })
   },
-  addMenuItem(gatheringId: string, item: Omit<MenuItem, 'id'>) {
+  addMenuItem(
+    gatheringId: string,
+    item: Omit<MenuItem, 'id'>,
+    organizerCode?: string | null,
+  ) {
     return request<Gathering>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/menu`,
-      { method: 'POST', body: JSON.stringify(item) },
+      {
+        method: 'POST',
+        body: JSON.stringify(item),
+        organizerCode: withCode(gatheringId, organizerCode),
+      },
     )
   },
-  setMenuCard(gatheringId: string, menuCardUrl: string) {
+  setMenuCard(
+    gatheringId: string,
+    menuCardUrl: string,
+    organizerCode?: string | null,
+  ) {
     return request<Gathering>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/menu-card`,
-      { method: 'PUT', body: JSON.stringify({ menuCardUrl }) },
+      {
+        method: 'PUT',
+        body: JSON.stringify({ menuCardUrl }),
+        organizerCode: withCode(gatheringId, organizerCode),
+      },
     )
   },
   setMenuCarte(
     gatheringId: string,
     items: CarteItem[],
     approved: boolean,
+    organizerCode?: string | null,
   ) {
     return request<Gathering>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/menu-carte`,
-      { method: 'PUT', body: JSON.stringify({ items, approved }) },
+      {
+        method: 'PUT',
+        body: JSON.stringify({ items, approved }),
+        organizerCode: withCode(gatheringId, organizerCode),
+      },
     )
   },
-  removeMenuItem(gatheringId: string, itemId: string) {
+  removeMenuItem(
+    gatheringId: string,
+    itemId: string,
+    organizerCode?: string | null,
+  ) {
     return request<Gathering>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/menu/${encodeURIComponent(itemId)}`,
-      { method: 'DELETE' },
+      {
+        method: 'DELETE',
+        organizerCode: withCode(gatheringId, organizerCode),
+      },
     )
   },
   addAttendee(
@@ -88,22 +150,43 @@ export const api = {
     attendee: Omit<Attendee, 'id' | 'createdAt' | 'amountPaid'> & {
       amountPaid?: number
     },
+    organizerCode?: string | null,
+  ) {
+    return request<AddAttendeeResult>(
+      `/api/gatherings/${encodeURIComponent(gatheringId)}/attendees`,
+      {
+        method: 'POST',
+        body: JSON.stringify(attendee),
+        organizerCode: withCode(gatheringId, organizerCode),
+      },
+    )
+  },
+  updateAttendee(
+    gatheringId: string,
+    attendeeId: string,
+    patch: Partial<Attendee>,
+    organizerCode?: string | null,
   ) {
     return request<Gathering>(
-      `/api/gatherings/${encodeURIComponent(gatheringId)}/attendees`,
-      { method: 'POST', body: JSON.stringify(attendee) },
+      `/api/gatherings/${encodeURIComponent(gatheringId)}/attendees/${encodeURIComponent(attendeeId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+        organizerCode: withCode(gatheringId, organizerCode),
+      },
     )
   },
-  updateAttendee(gatheringId: string, attendeeId: string, patch: Partial<Attendee>) {
+  removeAttendee(
+    gatheringId: string,
+    attendeeId: string,
+    organizerCode?: string | null,
+  ) {
     return request<Gathering>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/attendees/${encodeURIComponent(attendeeId)}`,
-      { method: 'PATCH', body: JSON.stringify(patch) },
-    )
-  },
-  removeAttendee(gatheringId: string, attendeeId: string) {
-    return request<Gathering>(
-      `/api/gatherings/${encodeURIComponent(gatheringId)}/attendees/${encodeURIComponent(attendeeId)}`,
-      { method: 'DELETE' },
+      {
+        method: 'DELETE',
+        organizerCode: withCode(gatheringId, organizerCode),
+      },
     )
   },
   sendMessage(gatheringId: string, message: MessageInput) {
@@ -116,16 +199,28 @@ export const api = {
     gatheringId: string,
     messageId: string,
     patch: { read?: boolean },
+    organizerCode?: string | null,
   ) {
     return request<Gathering>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/messages/${encodeURIComponent(messageId)}`,
-      { method: 'PATCH', body: JSON.stringify(patch) },
+      {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+        organizerCode: withCode(gatheringId, organizerCode),
+      },
     )
   },
-  deleteMessage(gatheringId: string, messageId: string) {
+  deleteMessage(
+    gatheringId: string,
+    messageId: string,
+    organizerCode?: string | null,
+  ) {
     return request<Gathering>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/messages/${encodeURIComponent(messageId)}`,
-      { method: 'DELETE' },
+      {
+        method: 'DELETE',
+        organizerCode: withCode(gatheringId, organizerCode),
+      },
     )
   },
 }

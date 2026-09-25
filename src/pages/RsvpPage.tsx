@@ -25,6 +25,10 @@ import {
 } from '../lib/money'
 import { pickFeedback, rsvpSuccessKeys } from '../lib/feedback'
 import {
+  loadMyRsvp,
+  saveMyRsvp,
+} from '../lib/organizerAccess'
+import {
   clearRsvpDraft,
   loadGuestPrefs,
   loadRsvpDraft,
@@ -81,6 +85,7 @@ export function RsvpPage() {
   const [submitted, setSubmitted] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
   const [lastSummary, setLastSummary] = useState<string | null>(null)
+  const [rsvpUpdated, setRsvpUpdated] = useState(false)
   const [saving, setSaving] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [contactOpen, setContactOpen] = useState(false)
@@ -162,7 +167,10 @@ export function RsvpPage() {
     return idsHaveAlaCarte(menuItemIds, gathering.menu)
   }, [gathering, asGroup, members, menuItemIds])
 
-  const whoReady = name.trim().length > 0 && (!forSomeoneElse || registeredBy.trim().length > 0)
+  const whoReady =
+    name.trim().length > 0 &&
+    email.trim().length > 0 &&
+    (!forSomeoneElse || registeredBy.trim().length > 0)
 
   const menuReady = useMemo(() => {
     if (!gathering) return false
@@ -286,6 +294,11 @@ export function RsvpPage() {
       goTo('who')
       return
     }
+    if (!email.trim()) {
+      setSubmitError(t('rsvpNeedEmail'))
+      goTo('who')
+      return
+    }
     if (!menuReady) {
       setSubmitError(t('rsvpNeedMenu'))
       goTo('menu')
@@ -295,7 +308,7 @@ export function RsvpPage() {
     setSaving(true)
     setSubmitError(null)
     try {
-      await addAttendee(gathering.id, {
+      const result = await addAttendee(gathering.id, {
         name: name.trim(),
         registeredBy: registrar,
         email: email.trim(),
@@ -339,9 +352,15 @@ export function RsvpPage() {
         email: email.trim(),
         phone: phone.trim(),
       })
+      saveMyRsvp(gathering.id, result.attendeeId, email.trim())
       clearRsvpDraft(gathering.id)
       setLastSummary(summary)
-      setSuccessMessage(pickFeedback(t, [...rsvpSuccessKeys]))
+      setRsvpUpdated(result.updated)
+      setSuccessMessage(
+        result.updated
+          ? t('rsvpUpdatedMsg')
+          : pickFeedback(t, [...rsvpSuccessKeys]),
+      )
       setSubmitted(true)
       resetForm(true)
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -409,19 +428,24 @@ export function RsvpPage() {
           <p className="rsvp-success-kicker">{t('rsvpDoneKicker')}</p>
           <h1>{successMessage || t('feedbackRsvp1')}</h1>
           {lastSummary && <p className="rsvp-success-summary">{lastSummary}</p>}
-          <p className="sub">{t('rsvpDoneSub')}</p>
+          <p className="sub">
+            {rsvpUpdated ? t('rsvpDoneUpdatedSub') : t('rsvpDoneSub')}
+          </p>
           <div className="form-actions rsvp-success-actions">
             <button
               type="button"
               className="btn btn-accent"
               onClick={() => {
+                const mine = loadMyRsvp(gathering.id)
                 setSubmitted(false)
                 setLastSummary(null)
+                setRsvpUpdated(false)
                 setStep('who')
+                if (mine?.email) setEmail(mine.email)
                 formTopRef.current?.scrollIntoView({ behavior: 'smooth' })
               }}
             >
-              {t('rsvpAnother')}
+              {t('rsvpUpdateMine')}
             </button>
             <button
               type="button"
@@ -513,6 +537,7 @@ export function RsvpPage() {
       </div>
 
       <section className="panel rsvp-flow" ref={formTopRef}>
+        <p className="rsvp-unique-hint">{t('rsvpUniqueHint')}</p>
         <nav className="rsvp-steps" aria-label={t('rsvpStepsLabel')}>
           {STEPS.map((key, index) => {
             const active = step === key
@@ -598,9 +623,10 @@ export function RsvpPage() {
                 </label>
               )}
               <label>
-                {t('emailOptional')}
+                {t('emailRequired')}
                 <input
                   type="email"
+                  required
                   autoComplete="email"
                   inputMode="email"
                   value={email}

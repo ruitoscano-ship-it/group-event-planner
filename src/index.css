@@ -2393,3 +2393,24 @@ body[data-menu-sheet-open='1'] {
   color: #04352f;
   box-shadow: inset 0 0 0 1px rgba(0, 79, 70, 0.12);
 }
+
+.unlock-panel {
+  max-width: 32rem;
+  margin: 1.5rem auto;
+}
+
+.organizer-code-panel.is-new {
+  border-color: rgba(0, 107, 95, 0.35);
+  background: linear-gradient(135deg, #e8f6f1 0%, #fff 55%);
+  box-shadow: 0 12px 32px rgba(0, 79, 70, 0.08);
+}
+
+.rsvp-unique-hint {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  background: #f4faf8;
+  border: 1px solid rgba(0, 107, 95, 0.14);
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}

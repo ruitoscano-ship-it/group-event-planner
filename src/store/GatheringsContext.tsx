@@ -14,6 +14,11 @@ import {
   rememberGatheringId,
   saveKnownIds,
 } from '../lib/knownIds'
+import {
+  forgetOrganizerCode,
+  loadOrganizerCode,
+  saveOrganizerCode,
+} from '../lib/organizerAccess'
 import type {
   Attendee,
   CarteItem,
@@ -23,13 +28,29 @@ import type {
   MessageInput,
 } from '../types'
 
+type AddAttendeeInput = Omit<Attendee, 'id' | 'createdAt' | 'amountPaid'> & {
+  amountPaid?: number
+}
+
 type Store = {
   gatherings: Gathering[]
   loading: boolean
   error: string | null
   refresh: () => Promise<void>
   ensureGathering: (id: string) => Promise<Gathering | null>
-  createGathering: (input: GatheringInput) => Promise<Gathering>
+  createGathering: (input: GatheringInput) => Promise<{
+    gathering: Gathering
+    organizerCode: string
+  }>
+  unlockWithCode: (code: string) => Promise<{
+    gathering: Gathering
+    organizerCode: string
+  }>
+  unlockEvent: (
+    gatheringId: string,
+    code: string,
+  ) => Promise<{ gathering: Gathering; organizerCode: string }>
+  hasOrganizerAccess: (gatheringId: string) => boolean
   updateGathering: (id: string, patch: Partial<Gathering>) => Promise<void>
   deleteGathering: (id: string) => Promise<void>
   addMenuItem: (gatheringId: string, item: Omit<MenuItem, 'id'>) => Promise<void>
@@ -42,10 +63,8 @@ type Store = {
   removeMenuItem: (gatheringId: string, itemId: string) => Promise<void>
   addAttendee: (
     gatheringId: string,
-    attendee: Omit<Attendee, 'id' | 'createdAt' | 'amountPaid'> & {
-      amountPaid?: number
-    },
-  ) => Promise<void>
+    attendee: AddAttendeeInput,
+  ) => Promise<{ attendeeId: string; updated: boolean }>
   updateAttendee: (
     gatheringId: string,
     attendeeId: string,
@@ -76,6 +95,7 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
   const [gatherings, setGatherings] = useState<Gathering[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [accessTick, setAccessTick] = useState(0)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -84,7 +104,6 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       const ids = loadKnownIds()
       const list = await api.listGatherings(ids)
       const foundIds = new Set(list.map((g) => g.id))
-      // Drop local bookmarks for gatherings deleted remotely
       saveKnownIds(ids.filter((id) => foundIds.has(id)))
       setGatherings(list)
     } catch (err) {
@@ -112,11 +131,39 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const createGathering = useCallback(async (input: GatheringInput) => {
-    const gathering = await api.createGathering(input)
-    rememberGatheringId(gathering.id)
-    setGatherings((prev) => [gathering, ...prev])
-    return gathering
+    const result = await api.createGathering(input)
+    rememberGatheringId(result.gathering.id)
+    saveOrganizerCode(result.gathering.id, result.organizerCode)
+    setAccessTick((n) => n + 1)
+    setGatherings((prev) => [result.gathering, ...prev])
+    return result
   }, [])
+
+  const unlockWithCode = useCallback(async (code: string) => {
+    const result = await api.accessByCode(code)
+    rememberGatheringId(result.gathering.id)
+    saveOrganizerCode(result.gathering.id, result.organizerCode)
+    setAccessTick((n) => n + 1)
+    setGatherings((prev) => upsert(prev, result.gathering))
+    return result
+  }, [])
+
+  const unlockEvent = useCallback(async (gatheringId: string, code: string) => {
+    const result = await api.unlockGathering(gatheringId, code)
+    rememberGatheringId(result.gathering.id)
+    saveOrganizerCode(result.gathering.id, result.organizerCode)
+    setAccessTick((n) => n + 1)
+    setGatherings((prev) => upsert(prev, result.gathering))
+    return result
+  }, [])
+
+  const hasOrganizerAccess = useCallback(
+    (gatheringId: string) => {
+      void accessTick
+      return Boolean(loadOrganizerCode(gatheringId))
+    },
+    [accessTick],
+  )
 
   const updateGathering = useCallback(async (id: string, patch: Partial<Gathering>) => {
     const current = gatherings.find((g) => g.id === id)
@@ -128,6 +175,8 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
   const deleteGathering = useCallback(async (id: string) => {
     await api.deleteGathering(id)
     forgetGatheringId(id)
+    forgetOrganizerCode(id)
+    setAccessTick((n) => n + 1)
     setGatherings((prev) => prev.filter((g) => g.id !== id))
   }, [])
 
@@ -157,18 +206,11 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
     setGatherings((prev) => upsert(prev, next))
   }, [])
 
-  const addAttendee = useCallback(
-    async (
-      gatheringId: string,
-      attendee: Omit<Attendee, 'id' | 'createdAt' | 'amountPaid'> & {
-        amountPaid?: number
-      },
-    ) => {
-      const next = await api.addAttendee(gatheringId, attendee)
-      setGatherings((prev) => upsert(prev, next))
-    },
-    [],
-  )
+  const addAttendee = useCallback(async (gatheringId: string, attendee: AddAttendeeInput) => {
+    const result = await api.addAttendee(gatheringId, attendee)
+    setGatherings((prev) => upsert(prev, result.gathering))
+    return { attendeeId: result.attendeeId, updated: result.updated }
+  }, [])
 
   const updateAttendee = useCallback(
     async (gatheringId: string, attendeeId: string, patch: Partial<Attendee>) => {
@@ -214,6 +256,9 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       refresh,
       ensureGathering,
       createGathering,
+      unlockWithCode,
+      unlockEvent,
+      hasOrganizerAccess,
       updateGathering,
       deleteGathering,
       addMenuItem,
@@ -235,6 +280,9 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       refresh,
       ensureGathering,
       createGathering,
+      unlockWithCode,
+      unlockEvent,
+      hasOrganizerAccess,
       updateGathering,
       deleteGathering,
       addMenuItem,

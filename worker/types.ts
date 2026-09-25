@@ -65,6 +65,8 @@ export type Gathering = {
   organizerName: string
   organizerEmail: string
   organizerPhone: string
+  /** Secret code that unlocks organizer manage access. Never sent on public GETs. */
+  organizerCode: string
   menuCardUrl: string
   carteItems: CarteItem[]
   carteApproved: boolean

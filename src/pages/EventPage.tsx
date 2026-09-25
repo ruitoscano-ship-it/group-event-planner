@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AgeGroupPicker } from '../components/AgeGroupPicker'
 import { EventCarteEditor } from '../components/EventCarteEditor'
 import { GuestEditor } from '../components/GuestEditor'
@@ -22,6 +22,10 @@ import {
   toggleMenuSelection,
   unitPriceForIds,
 } from '../lib/money'
+import {
+  formatOrganizerCode,
+  loadOrganizerCode,
+} from '../lib/organizerAccess'
 import { buildEventReportHtml, openEventReport } from '../lib/report'
 import {
   detailsSavedKeys,
@@ -37,6 +41,7 @@ type Tab = 'menu' | 'guests' | 'payments' | 'inbox'
 
 export function EventPage() {
   const { eventId = '' } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const { t, localeTag } = useI18n()
   const {
@@ -54,13 +59,22 @@ export function EventPage() {
     markMessageRead,
     deleteMessage,
     setMenuCarte,
+    unlockEvent,
+    hasOrganizerAccess,
   } = useGatherings()
   const gathering = getGathering(eventId)
   const [fetching, setFetching] = useState(!gathering)
   const [notFound, setNotFound] = useState(false)
   const [tab, setTab] = useState<Tab>('menu')
   const [copied, setCopied] = useState(false)
+  const [codeCopied, setCodeCopied] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [unlockCode, setUnlockCode] = useState('')
+  const [unlockBusy, setUnlockBusy] = useState(false)
+  const [unlockError, setUnlockError] = useState<string | null>(null)
+  const justCreated = searchParams.get('created') === '1'
+  const canManage = hasOrganizerAccess(eventId)
+  const organizerCode = loadOrganizerCode(eventId)
   const [cardLink, setCardLink] = useState('')
   const [cardBusy, setCardBusy] = useState(false)
   const [cardMsg, setCardMsg] = useState<string | null>(null)
@@ -189,6 +203,71 @@ export function EventPage() {
     )
   }
 
+  if (!canManage) {
+    return (
+      <>
+        <header className="topbar">
+          <Link viewTransition to="/" className="brand">
+            <i className="brand-mark" aria-hidden />
+            Round<span>.</span>
+          </Link>
+          <LanguageSwitcher />
+        </header>
+        <section className="panel unlock-panel">
+          <h2>{t('unlockEventTitle')}</h2>
+          <p className="sub">{t('unlockEventSub', { title: gathering.title })}</p>
+          {unlockError && <p className="allergy">{unlockError}</p>}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!unlockCode.trim() || unlockBusy) return
+              setUnlockBusy(true)
+              setUnlockError(null)
+              void unlockEvent(gathering.id, unlockCode.trim())
+                .then(() => {
+                  setUnlockCode('')
+                  setSearchParams({}, { replace: true })
+                })
+                .catch((err) => {
+                  setUnlockError(
+                    err instanceof Error ? err.message : t('accessCodeFailed'),
+                  )
+                })
+                .finally(() => setUnlockBusy(false))
+            }}
+          >
+            <label className="full">
+              {t('organizerCode')}
+              <input
+                value={unlockCode}
+                onChange={(e) => setUnlockCode(formatOrganizerCode(e.target.value))}
+                placeholder={t('organizerCodePlaceholder')}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                autoFocus
+              />
+            </label>
+            <div className="form-actions">
+              <Link viewTransition className="btn btn-ghost" to="/">
+                {t('goHome')}
+              </Link>
+              <button className="btn btn-accent" type="submit" disabled={unlockBusy}>
+                {unlockBusy ? t('saving') : t('unlockEvent')}
+              </button>
+            </div>
+          </form>
+          <p className="sub" style={{ marginTop: '1rem' }}>
+            {t('unlockEventRsvpHint')}{' '}
+            <Link viewTransition to={`/rsvp/${gathering.id}`}>
+              {t('openRsvp')}
+            </Link>
+          </p>
+        </section>
+      </>
+    )
+  }
+
   const rsvpUrl = `${window.location.origin}/rsvp/${gathering.id}`
   const typeLabel =
     gathering.type === 'lunch'
@@ -198,6 +277,17 @@ export function EventPage() {
         : gathering.type === 'brunch'
           ? t('typeBrunch')
           : t('typeOther')
+
+  async function copyOrganizerCode() {
+    if (!organizerCode) return
+    try {
+      await navigator.clipboard.writeText(organizerCode)
+      setCodeCopied(true)
+      window.setTimeout(() => setCodeCopied(false), 1800)
+    } catch {
+      setCodeCopied(false)
+    }
+  }
 
   async function copyLink() {
     try {
@@ -664,6 +754,38 @@ export function EventPage() {
           {t('openEventReport')}
         </button>
       </div>
+
+      {organizerCode && (
+        <section
+          className={`panel organizer-code-panel ${justCreated ? 'is-new' : ''}`}
+          style={{ marginBottom: '1rem' }}
+        >
+          <h2>{t('organizerCodeTitle')}</h2>
+          <p className="sub">
+            {justCreated ? t('organizerCodeNewSub') : t('organizerCodeSub')}
+          </p>
+          <div className="share-box" style={{ margin: '0.75rem 0 0' }}>
+            <strong>{t('organizerCode')}</strong>
+            <code>{organizerCode}</code>
+            <button
+              className="btn btn-sm btn-accent"
+              type="button"
+              onClick={() => void copyOrganizerCode()}
+            >
+              {codeCopied ? t('copied') : t('copyCode')}
+            </button>
+            {justCreated && (
+              <button
+                className="btn btn-sm btn-ghost"
+                type="button"
+                onClick={() => setSearchParams({}, { replace: true })}
+              >
+                {t('codeSavedDismiss')}
+              </button>
+            )}
+          </div>
+        </section>
+      )}
       {reportMsg && (
         <p className="allergy" style={{ marginTop: '-0.5rem', marginBottom: '1rem' }}>
           {reportMsg}

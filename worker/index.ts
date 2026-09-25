@@ -26,6 +26,55 @@ function newId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().slice(0, 8)}`
 }
 
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+function normalizeOrganizerCode(code: string): string {
+  return String(code || '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toUpperCase()
+}
+
+function formatOrganizerCode(code: string): string {
+  const raw = normalizeOrganizerCode(code)
+  if (raw.length <= 4) return raw
+  return `${raw.slice(0, 4)}-${raw.slice(4, 8)}`
+}
+
+function generateOrganizerCode(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(8))
+  let raw = ''
+  for (const b of bytes) raw += CODE_ALPHABET[b % CODE_ALPHABET.length]
+  return formatOrganizerCode(raw)
+}
+
+function normalizeEmail(email: string): string {
+  return String(email || '').trim().toLowerCase()
+}
+
+function toPublicGathering(gathering: Gathering): Omit<Gathering, 'organizerCode'> & {
+  organizerCode?: undefined
+} {
+  const { organizerCode: _code, ...rest } = gathering
+  return rest
+}
+
+function readOrganizerCodeHeader(request: Request): string {
+  return normalizeOrganizerCode(request.headers.get('X-Organizer-Code') || '')
+}
+
+function isOrganizerAuthorized(request: Request, gathering: Gathering): boolean {
+  const stored = normalizeOrganizerCode(gathering.organizerCode || '')
+  // Legacy gatherings created before codes: allow until a code exists
+  if (!stored) return true
+  const provided = readOrganizerCodeHeader(request)
+  return Boolean(provided) && provided === stored
+}
+
+function requireOrganizer(request: Request, gathering: Gathering): Response | null {
+  if (isOrganizerAuthorized(request, gathering)) return null
+  return error('Organizer code required', 401)
+}
+
 function normalizeGathering(raw: Gathering & { menuOcrLines?: string[] }): Gathering {
   const legacyLines = Array.isArray(raw.menuOcrLines)
     ? raw.menuOcrLines.map((line) => String(line || '').trim()).filter(Boolean)
@@ -43,6 +92,7 @@ function normalizeGathering(raw: Gathering & { menuOcrLines?: string[] }): Gathe
   return {
     ...raw,
     menuCardUrl: raw.menuCardUrl || '',
+    organizerCode: formatOrganizerCode(raw.organizerCode || '') || '',
     carteItems,
     carteApproved: Boolean(raw.carteApproved) && carteItems.length > 0,
     organizerName: (raw.organizerName || '').trim(),
@@ -92,6 +142,28 @@ function normalizeGathering(raw: Gathering & { menuOcrLines?: string[] }): Gathe
         }))
       : [],
   }
+}
+
+async function findGatheringByOrganizerCode(
+  db: D1Database,
+  code: string,
+): Promise<Gathering | null> {
+  const needle = normalizeOrganizerCode(code)
+  if (!needle) return null
+  const { results } = await db
+    .prepare('SELECT data FROM gatherings ORDER BY updated_at DESC LIMIT 200')
+    .all<{ data: string }>()
+  for (const row of results ?? []) {
+    try {
+      const gathering = normalizeGathering(JSON.parse(row.data) as Gathering)
+      if (normalizeOrganizerCode(gathering.organizerCode) === needle) {
+        return gathering
+      }
+    } catch {
+      // skip bad rows
+    }
+  }
+  return null
 }
 
 async function readGathering(db: D1Database, id: string): Promise<Gathering | null> {
@@ -170,14 +242,28 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const gatherings = (results ?? [])
       .map((row) => {
         try {
-          return normalizeGathering(JSON.parse(row.data) as Gathering)
+          return toPublicGathering(
+            normalizeGathering(JSON.parse(row.data) as Gathering),
+          )
         } catch {
           return null
         }
       })
-      .filter((g): g is Gathering => g !== null)
+      .filter((g): g is ReturnType<typeof toPublicGathering> => g !== null)
 
     return json(gatherings)
+  }
+
+  if (path === '/api/access' && method === 'POST') {
+    const body = (await request.json()) as { code?: string }
+    const code = normalizeOrganizerCode(body.code || '')
+    if (!code) return error('Organizer code is required')
+    const gathering = await findGatheringByOrganizerCode(env.DB, code)
+    if (!gathering) return error('No event found for that code', 404)
+    return json({
+      gathering: toPublicGathering(gathering),
+      organizerCode: formatOrganizerCode(gathering.organizerCode),
+    })
   }
 
   if (path === '/api/gatherings' && method === 'POST') {
@@ -185,6 +271,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (!body?.title?.trim()) return error('Title is required')
 
     const now = new Date().toISOString()
+    const organizerCode = generateOrganizerCode()
     const gathering: Gathering = {
       id: newId('evt'),
       title: body.title.trim(),
@@ -197,6 +284,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       organizerName: (body.organizerName || '').trim(),
       organizerEmail: (body.organizerEmail || '').trim(),
       organizerPhone: (body.organizerPhone || '').trim(),
+      organizerCode,
       menuCardUrl: (body.menuCardUrl || '').trim(),
       carteItems: [],
       carteApproved: false,
@@ -206,7 +294,13 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       createdAt: now,
     }
     await writeGathering(env.DB, gathering, true)
-    return json(gathering, 201)
+    return json(
+      {
+        gathering: toPublicGathering(gathering),
+        organizerCode,
+      },
+      201,
+    )
   }
 
   const gatheringMatch = path.match(/^\/api\/gatherings\/([^/]+)$/)
@@ -216,18 +310,21 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (method === 'GET') {
       const gathering = await readGathering(env.DB, id)
       if (!gathering) return error('Gathering not found', 404)
-      return json(gathering)
+      return json(toPublicGathering(gathering))
     }
 
     if (method === 'PUT') {
-      const body = (await request.json()) as Gathering
-      if (!body || body.id !== id) return error('Invalid gathering payload')
       const existing = await readGathering(env.DB, id)
       if (!existing) return error('Gathering not found', 404)
+      const denied = requireOrganizer(request, existing)
+      if (denied) return denied
+      const body = (await request.json()) as Gathering
+      if (!body || body.id !== id) return error('Invalid gathering payload')
       const next: Gathering = {
         ...existing,
         ...body,
         id,
+        organizerCode: existing.organizerCode,
         organizerName:
           typeof body.organizerName === 'string'
             ? body.organizerName.trim()
@@ -248,10 +345,14 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
         createdAt: existing.createdAt,
       }
       await writeGathering(env.DB, next, false)
-      return json(next)
+      return json(toPublicGathering(next))
     }
 
     if (method === 'DELETE') {
+      const existing = await readGathering(env.DB, id)
+      if (!existing) return error('Gathering not found', 404)
+      const denied = requireOrganizer(request, existing)
+      if (denied) return denied
       const result = await env.DB.prepare('DELETE FROM gatherings WHERE id = ?')
         .bind(id)
         .run()
@@ -260,11 +361,39 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     }
   }
 
+  const unlockMatch = path.match(/^\/api\/gatherings\/([^/]+)\/unlock$/)
+  if (unlockMatch && method === 'POST') {
+    const id = decodeURIComponent(unlockMatch[1])
+    const gathering = await readGathering(env.DB, id)
+    if (!gathering) return error('Gathering not found', 404)
+    const body = (await request.json()) as { code?: string }
+    const code = normalizeOrganizerCode(body.code || '')
+    if (!gathering.organizerCode) {
+      // Legacy event: assign a code now so future access is protected
+      const assigned = code || generateOrganizerCode()
+      gathering.organizerCode = formatOrganizerCode(assigned)
+      await writeGathering(env.DB, gathering, false)
+      return json({
+        gathering: toPublicGathering(gathering),
+        organizerCode: gathering.organizerCode,
+      })
+    }
+    if (!code || code !== normalizeOrganizerCode(gathering.organizerCode)) {
+      return error('Invalid organizer code', 401)
+    }
+    return json({
+      gathering: toPublicGathering(gathering),
+      organizerCode: formatOrganizerCode(gathering.organizerCode),
+    })
+  }
+
   const menuCardMatch = path.match(/^\/api\/gatherings\/([^/]+)\/menu-card$/)
   if (menuCardMatch && method === 'PUT') {
     const id = decodeURIComponent(menuCardMatch[1])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
+    const denied = requireOrganizer(request, gathering)
+    if (denied) return denied
     const body = (await request.json()) as { menuCardUrl?: string }
     const urlValue = (body.menuCardUrl || '').trim()
     if (urlValue.startsWith('data:') && urlValue.length > 700_000) {
@@ -276,7 +405,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       gathering.carteApproved = false
     }
     await writeGathering(env.DB, gathering, false)
-    return json(gathering)
+    return json(toPublicGathering(gathering))
   }
 
   const menuCarteMatch = path.match(/^\/api\/gatherings\/([^/]+)\/menu-carte$/)
@@ -284,6 +413,8 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const id = decodeURIComponent(menuCarteMatch[1])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
+    const denied = requireOrganizer(request, gathering)
+    if (denied) return denied
     const body = (await request.json()) as {
       items?: unknown
       approved?: unknown
@@ -305,7 +436,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     gathering.carteItems = items
     gathering.carteApproved = Boolean(body.approved) && items.length > 0
     await writeGathering(env.DB, gathering, false)
-    return json(gathering)
+    return json(toPublicGathering(gathering))
   }
 
   const menuMatch = path.match(/^\/api\/gatherings\/([^/]+)\/menu$/)
@@ -313,6 +444,8 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const id = decodeURIComponent(menuMatch[1])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
+    const denied = requireOrganizer(request, gathering)
+    if (denied) return denied
     const body = (await request.json()) as Omit<MenuItem, 'id'>
     if (!body?.name?.trim()) return error('Menu item name is required')
     const isAlaCarte = Boolean(body.isAlaCarte)
@@ -326,7 +459,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     }
     gathering.menu.push(item)
     await writeGathering(env.DB, gathering, false)
-    return json(gathering, 201)
+    return json(toPublicGathering(gathering), 201)
   }
 
   const menuItemMatch = path.match(/^\/api\/gatherings\/([^/]+)\/menu\/([^/]+)$/)
@@ -335,6 +468,8 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const itemId = decodeURIComponent(menuItemMatch[2])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
+    const denied = requireOrganizer(request, gathering)
+    if (denied) return denied
     gathering.menu = gathering.menu.filter((m) => m.id !== itemId)
     gathering.attendees = gathering.attendees.map((a) => ({
       ...a,
@@ -345,7 +480,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       })),
     }))
     await writeGathering(env.DB, gathering, false)
-    return json(gathering)
+    return json(toPublicGathering(gathering))
   }
 
   const attendeesMatch = path.match(/^\/api\/gatherings\/([^/]+)\/attendees$/)
@@ -353,10 +488,16 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const id = decodeURIComponent(attendeesMatch[1])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
+    const asOrganizer = isOrganizerAuthorized(request, gathering)
     const body = (await request.json()) as Omit<Attendee, 'id' | 'createdAt' | 'amountPaid'> & {
       amountPaid?: number
     }
     if (!body?.name?.trim()) return error('Guest name is required')
+    const email = normalizeEmail(body.email || '')
+    if (!asOrganizer && !email) {
+      return error('Email is required for RSVP')
+    }
+
     const isGroup = Boolean(body.isGroup)
     const members = isGroup && Array.isArray(body.members)
       ? body.members.map((m) => ({
@@ -372,11 +513,54 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (isGroup && members.length === 0) {
       return error('Add at least one group member with a menu choice')
     }
+
+    const existingIdx = email
+      ? gathering.attendees.findIndex((a) => normalizeEmail(a.email) === email)
+      : -1
+
+    if (existingIdx >= 0) {
+      if (asOrganizer) {
+        return error('A guest with this email already RSVPed for this event', 409)
+      }
+      // Guest re-submit with same email updates their unique RSVP
+      const current = gathering.attendees[existingIdx]
+      gathering.attendees[existingIdx] = {
+        ...current,
+        name: body.name.trim(),
+        registeredBy: (body.registeredBy || body.name).trim(),
+        email,
+        phone: (body.phone || '').trim(),
+        menuItemIds: isGroup
+          ? []
+          : Array.isArray(body.menuItemIds)
+            ? body.menuItemIds
+            : [],
+        carteItemIds: isGroup
+          ? []
+          : Array.isArray(body.carteItemIds)
+            ? body.carteItemIds
+            : [],
+        allergies: isGroup ? '' : (body.allergies || '').trim(),
+        notes: (body.notes || '').trim(),
+        menuRequest: isGroup ? '' : (body.menuRequest || '').trim(),
+        ageGroup: isGroup ? 'adult' : body.ageGroup === 'child' ? 'child' : 'adult',
+        isGroup,
+        members,
+        groupSize: isGroup ? Math.max(1, members.length) : 1,
+      }
+      await writeGathering(env.DB, gathering, false)
+      return json({
+        gathering: toPublicGathering(gathering),
+        attendeeId: current.id,
+        updated: true,
+      })
+    }
+
     const attendee: Attendee = {
       id: newId('guest'),
       name: body.name.trim(),
       registeredBy: (body.registeredBy || body.name).trim(),
-      email: (body.email || '').trim(),
+      email: email || (body.email || '').trim(),
       phone: (body.phone || '').trim(),
       menuItemIds: isGroup
         ? []
@@ -400,7 +584,14 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     }
     gathering.attendees.push(attendee)
     await writeGathering(env.DB, gathering, false)
-    return json(gathering, 201)
+    return json(
+      {
+        gathering: toPublicGathering(gathering),
+        attendeeId: attendee.id,
+        updated: false,
+      },
+      201,
+    )
   }
 
   const attendeeMatch = path.match(/^\/api\/gatherings\/([^/]+)\/attendees\/([^/]+)$/)
@@ -411,10 +602,22 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (!gathering) return error('Gathering not found', 404)
 
     if (method === 'PATCH') {
+      const denied = requireOrganizer(request, gathering)
+      if (denied) return denied
       const body = (await request.json()) as Partial<Attendee>
       const idx = gathering.attendees.findIndex((a) => a.id === attendeeId)
       if (idx === -1) return error('Attendee not found', 404)
       const current = gathering.attendees[idx]
+      const nextEmail =
+        body.email !== undefined ? normalizeEmail(String(body.email)) : normalizeEmail(current.email)
+      if (nextEmail) {
+        const clash = gathering.attendees.find(
+          (a, i) => i !== idx && normalizeEmail(a.email) === nextEmail,
+        )
+        if (clash) {
+          return error('A guest with this email already RSVPed for this event', 409)
+        }
+      }
       const members =
         body.members !== undefined
           ? Array.isArray(body.members)
@@ -460,13 +663,15 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
         groupSize: isGroup ? Math.max(1, members.length || Number(body.groupSize) || 1) : 1,
       }
       await writeGathering(env.DB, gathering, false)
-      return json(gathering)
+      return json(toPublicGathering(gathering))
     }
 
     if (method === 'DELETE') {
+      const denied = requireOrganizer(request, gathering)
+      if (denied) return denied
       gathering.attendees = gathering.attendees.filter((a) => a.id !== attendeeId)
       await writeGathering(env.DB, gathering, false)
-      return json(gathering)
+      return json(toPublicGathering(gathering))
     }
   }
 
@@ -489,7 +694,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     }
     gathering.messages = [message, ...(gathering.messages || [])]
     await writeGathering(env.DB, gathering, false)
-    return json(gathering, 201)
+    return json(toPublicGathering(gathering), 201)
   }
 
   const messageMatch = path.match(/^\/api\/gatherings\/([^/]+)\/messages\/([^/]+)$/)
@@ -498,6 +703,8 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const messageId = decodeURIComponent(messageMatch[2])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
+    const denied = requireOrganizer(request, gathering)
+    if (denied) return denied
     const idx = (gathering.messages || []).findIndex((m) => m.id === messageId)
     if (idx === -1) return error('Message not found', 404)
 
@@ -508,13 +715,13 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
         read: body.read !== undefined ? Boolean(body.read) : gathering.messages[idx].read,
       }
       await writeGathering(env.DB, gathering, false)
-      return json(gathering)
+      return json(toPublicGathering(gathering))
     }
 
     if (method === 'DELETE') {
       gathering.messages = gathering.messages.filter((m) => m.id !== messageId)
       await writeGathering(env.DB, gathering, false)
-      return json(gathering)
+      return json(toPublicGathering(gathering))
     }
   }
 
