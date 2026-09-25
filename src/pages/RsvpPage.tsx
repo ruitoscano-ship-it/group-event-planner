@@ -414,14 +414,21 @@ export function RsvpPage() {
 
         <div className="event-summary-card">
           <h2>{gathering.title}</h2>
-          <p>
-            {typeLabel}
-            {' · '}
-            {formatDate(gathering.date, localeTag, t('dateTbd'))}
-            {gathering.time ? ` · ${gathering.time}` : ''}
-            {' · '}
-            {gathering.location || t('locationTbd')}
-          </p>
+          <div className="event-summary-meta">
+            <p>
+              <span className="event-summary-label">{t('date')}</span>
+              {formatDate(gathering.date, localeTag, t('dateTbd'))}
+              {gathering.type ? ` · ${typeLabel}` : ''}
+            </p>
+            <p>
+              <span className="event-summary-label">{t('time')}</span>
+              {gathering.time || '—'}
+            </p>
+            <p>
+              <span className="event-summary-label">{t('location')}</span>
+              {gathering.location || t('locationTbd')}
+            </p>
+          </div>
         </div>
 
         <section className="panel rsvp-success-panel" role="status">
@@ -521,14 +528,21 @@ export function RsvpPage() {
 
       <div className="event-summary-card">
         <h2>{gathering.title}</h2>
-        <p>
-          {typeLabel}
-          {' · '}
-          {formatDate(gathering.date, localeTag, t('dateTbd'))}
-          {gathering.time ? ` · ${gathering.time}` : ''}
-          {' · '}
-          {gathering.location || t('locationTbd')}
-        </p>
+        <div className="event-summary-meta">
+          <p>
+            <span className="event-summary-label">{t('date')}</span>
+            {formatDate(gathering.date, localeTag, t('dateTbd'))}
+            {gathering.type ? ` · ${typeLabel}` : ''}
+          </p>
+          <p>
+            <span className="event-summary-label">{t('time')}</span>
+            {gathering.time || '—'}
+          </p>
+          <p>
+            <span className="event-summary-label">{t('location')}</span>
+            {gathering.location || t('locationTbd')}
+          </p>
+        </div>
         {comingCount > 0 && (
           <p className="rsvp-coming-line">
             {t('alreadyComing', { count: comingCount })}

@@ -524,6 +524,27 @@ h3,
   -webkit-overflow-scrolling: touch;
 }
 
+.landing-panel .btn-ghost {
+  background: #fff;
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.landing-panel .btn-ghost:hover {
+  background: var(--green-soft);
+  border-color: transparent;
+}
+
+.landing-panel .btn-cancel {
+  color: var(--danger);
+  border-color: rgba(192, 57, 43, 0.28);
+}
+
+.landing-panel .btn-cancel:hover {
+  background: rgba(192, 57, 43, 0.06);
+  border-color: rgba(192, 57, 43, 0.35);
+}
+
 .landing-panel h2 {
   margin: 0;
   font-size: 1.25rem;
@@ -835,7 +856,43 @@ textarea {
 }
 
 .event-summary-card {
-  display: none;
+  display: block;
+  margin-bottom: 1rem;
+  padding: 1.15rem 1.2rem;
+  border-radius: 16px;
+  background: var(--green);
+  color: #fff;
+}
+
+.event-summary-card h2 {
+  margin: 0 0 0.55rem;
+  font-size: clamp(1.25rem, 3.5vw, 1.55rem);
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+
+.event-summary-card .event-summary-meta {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.event-summary-card .event-summary-meta p,
+.event-summary-card p {
+  margin: 0;
+  opacity: 0.9;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.event-summary-card .event-summary-label {
+  display: inline-block;
+  min-width: 4.5rem;
+  opacity: 0.72;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 0.45rem;
 }
 
 .collapsible-details {
@@ -1574,27 +1631,6 @@ textarea {
   .form-actions strong {
     width: 100%;
     order: -1;
-  }
-
-  .event-summary-card {
-    display: block;
-    margin-bottom: 1rem;
-    padding: 1rem 1.1rem;
-    border-radius: 16px;
-    background: var(--green);
-    color: #fff;
-  }
-
-  .event-summary-card h2 {
-    margin: 0 0 0.35rem;
-    font-size: 1.2rem;
-    color: #fff;
-  }
-
-  .event-summary-card p {
-    margin: 0;
-    opacity: 0.88;
-    font-size: 0.92rem;
   }
 
   .desktop-page-header {
@@ -2705,6 +2741,11 @@ body[data-menu-sheet-open='1'] {
 .create-chat-actions .btn {
   flex: 1 1 auto;
   min-width: 6.5rem;
+}
+
+.create-chat-actions .btn-cancel {
+  margin-right: auto;
+  flex: 0 1 auto;
 }
 
 .create-chat-saving {
