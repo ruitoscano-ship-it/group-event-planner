@@ -54,10 +54,45 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.lang = localeTag[locale]
-    document.title =
+    document.title = 'Round — The Gatherings app'
+
+    const description =
       locale === 'pt'
-        ? 'Round — planeador de encontros'
-        : 'Round — group gathering planner'
+        ? 'The Gatherings app by Round — planeie almoços e jantares em grupo, partilhe menus, recolha RSVPs e acompanhe quem ainda deve.'
+        : 'The Gatherings app by Round — plan group lunches and dinners, share menus, collect RSVPs, and track who still owes.'
+
+    const metaDescription = document.querySelector('meta[name="description"]')
+    if (metaDescription) metaDescription.setAttribute('content', description)
+
+    const ogTitle = document.querySelector('meta[property="og:title"]')
+    if (ogTitle) ogTitle.setAttribute('content', 'Round — The Gatherings app')
+
+    const ogDescription = document.querySelector('meta[property="og:description"]')
+    if (ogDescription) {
+      ogDescription.setAttribute(
+        'content',
+        locale === 'pt'
+          ? 'The Gatherings app — planeie almoços e jantares em grupo, partilhe menus, recolha RSVPs e acompanhe quem ainda deve.'
+          : 'The Gatherings app — plan group lunches and dinners, share menus, collect RSVPs, and track who still owes.',
+      )
+    }
+
+    const twitterTitle = document.querySelector('meta[name="twitter:title"]')
+    if (twitterTitle) {
+      twitterTitle.setAttribute('content', 'Round — The Gatherings app')
+    }
+
+    const twitterDescription = document.querySelector(
+      'meta[name="twitter:description"]',
+    )
+    if (twitterDescription) {
+      twitterDescription.setAttribute(
+        'content',
+        locale === 'pt'
+          ? 'The Gatherings app — planeie almoços e jantares em grupo, partilhe menus, recolha RSVPs e acompanhe quem ainda deve.'
+          : 'The Gatherings app — plan group lunches and dinners, share menus, collect RSVPs, and track who still owes.',
+      )
+    }
   }, [locale])
 
   const t = useCallback(
