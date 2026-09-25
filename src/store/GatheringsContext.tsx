@@ -27,6 +27,7 @@ type Store = {
   deleteGathering: (id: string) => Promise<void>
   addMenuItem: (gatheringId: string, item: Omit<MenuItem, 'id'>) => Promise<void>
   setMenuCard: (gatheringId: string, menuCardUrl: string) => Promise<void>
+  setMenuOcr: (gatheringId: string, lines: string[]) => Promise<void>
   removeMenuItem: (gatheringId: string, itemId: string) => Promise<void>
   addAttendee: (
     gatheringId: string,
@@ -132,6 +133,11 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
     setGatherings((prev) => upsert(prev, next))
   }, [])
 
+  const setMenuOcr = useCallback(async (gatheringId: string, lines: string[]) => {
+    const next = await api.setMenuOcr(gatheringId, lines)
+    setGatherings((prev) => upsert(prev, next))
+  }, [])
+
   const removeMenuItem = useCallback(async (gatheringId: string, itemId: string) => {
     const next = await api.removeMenuItem(gatheringId, itemId)
     setGatherings((prev) => upsert(prev, next))
@@ -198,6 +204,7 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       deleteGathering,
       addMenuItem,
       setMenuCard,
+      setMenuOcr,
       removeMenuItem,
       addAttendee,
       updateAttendee,
@@ -218,6 +225,7 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       deleteGathering,
       addMenuItem,
       setMenuCard,
+      setMenuOcr,
       removeMenuItem,
       addAttendee,
       updateAttendee,

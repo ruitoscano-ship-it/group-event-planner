@@ -65,6 +65,8 @@ export type Gathering = {
   organizerPhone: string
   /** Uploaded image path or external URL to the printed menu / carte */
   menuCardUrl: string
+  /** Dish lines extracted from the menu card via OCR */
+  menuOcrLines: string[]
   menu: MenuItem[]
   attendees: Attendee[]
   messages: InboxMessage[]
@@ -73,9 +75,10 @@ export type Gathering = {
 
 export type GatheringInput = Omit<
   Gathering,
-  'id' | 'menu' | 'attendees' | 'messages' | 'createdAt' | 'menuCardUrl'
+  'id' | 'menu' | 'attendees' | 'messages' | 'createdAt' | 'menuCardUrl' | 'menuOcrLines'
 > & {
   menuCardUrl?: string
+  menuOcrLines?: string[]
 }
 
 export type MessageInput = {

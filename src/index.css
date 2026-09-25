@@ -1818,24 +1818,27 @@ textarea {
 .menu-sheet-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 80;
-  background: rgba(6, 40, 35, 0.45);
+  z-index: 1200;
+  background: rgba(6, 40, 35, 0.48);
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 0.75rem;
-  animation: rise 0.2s ease both;
+  padding: env(safe-area-inset-top, 0.5rem) 0.5rem env(safe-area-inset-bottom, 0.5rem);
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 .menu-sheet {
   width: min(720px, 100%);
-  max-height: min(88vh, 900px);
+  max-height: min(90dvh, 920px);
   display: flex;
   flex-direction: column;
   background: #fff;
-  border-radius: 20px 20px 16px 16px;
+  border-radius: 20px 20px 14px 14px;
   box-shadow: 0 24px 60px rgba(6, 40, 35, 0.28);
   overflow: hidden;
+  touch-action: auto;
+  overscroll-behavior: contain;
 }
 
 .menu-sheet-head {
@@ -1843,15 +1846,16 @@ textarea {
   justify-content: space-between;
   align-items: flex-start;
   gap: 0.75rem;
-  padding: 1rem 1.1rem;
+  padding: 0.9rem 1rem;
   border-bottom: 1px solid var(--line);
   background: #f4faf8;
+  flex-shrink: 0;
 }
 
 .menu-sheet-head h2 {
   margin: 0 0 0.2rem;
   font-family: var(--font-display);
-  font-size: 1.25rem;
+  font-size: 1.2rem;
 }
 
 .menu-sheet-head .sub {
@@ -1860,8 +1864,11 @@ textarea {
 
 .menu-sheet-body {
   overflow: auto;
-  padding: 1rem 1.1rem 1.25rem;
+  padding: 0.9rem 1rem 1.15rem;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  flex: 1 1 auto;
 }
 
 .menu-sheet-card {
@@ -1870,11 +1877,85 @@ textarea {
   margin-bottom: 1rem;
 }
 
-.menu-sheet-card img {
-  width: 100%;
+.menu-zoom-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.menu-zoom-label {
+  min-width: 3.2rem;
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: var(--green-deep);
+}
+
+.menu-zoom-viewport {
+  overflow: auto;
+  max-height: min(48dvh, 420px);
   border-radius: 14px;
   border: 1px solid var(--line);
+  background: #eef4f1;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+  padding: 0.5rem;
+}
+
+.menu-zoom-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  transform-origin: top center;
+  transition: transform 0.15s ease;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.menu-ocr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.menu-ocr-preview {
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  background: #f4faf8;
+  border: 1px solid rgba(0, 107, 95, 0.12);
+}
+
+.menu-ocr-preview ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}
+
+.menu-order-field {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.menu-order-select-label,
+.menu-order-field > label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.menu-order-select {
+  width: 100%;
+  min-height: 48px;
+  border: 2px solid rgba(6, 40, 35, 0.14);
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
   background: #fff;
+  font: inherit;
 }
 
 .menu-sheet-list h3 {
@@ -1911,11 +1992,17 @@ textarea {
 @media (min-width: 720px) {
   .menu-sheet-backdrop {
     align-items: center;
+    touch-action: auto;
   }
 
   .menu-sheet {
     border-radius: 20px;
   }
+}
+
+body[data-menu-sheet-open='1'] {
+  overflow: hidden;
+  touch-action: none;
 }
 
 .age-group-picker {

@@ -11,6 +11,7 @@ import {
 } from '../lib/money'
 import type { Attendee, Gathering, GroupMember } from '../types'
 import { AgeGroupPicker } from './AgeGroupPicker'
+import { MenuOrderField } from './MenuOrderField'
 import { MenuPicker } from './MenuPicker'
 import { MenuSheet } from './MenuSheet'
 
@@ -18,6 +19,9 @@ type Props = {
   gathering: Gathering
   attendee: Attendee
   editing: boolean
+  ocrLines?: string[]
+  onOcrLines?: (lines: string[]) => void
+  saveOcrLines?: (lines: string[]) => Promise<void>
   onToggleEdit: () => void
   onSave: (patch: Partial<Attendee>) => Promise<void>
   onRemove: () => void
@@ -27,6 +31,9 @@ export function GuestEditor({
   gathering,
   attendee,
   editing,
+  ocrLines = [],
+  onOcrLines,
+  saveOcrLines,
   onToggleEdit,
   onSave,
   onRemove,
@@ -200,7 +207,12 @@ export function GuestEditor({
             {(gathering.menuCardUrl || gathering.menu.length > 0) && (
               <div className="menu-peek-bar">
                 <p className="sub">{t('menuPeekHint')}</p>
-                <MenuSheet gathering={gathering} compact />
+                <MenuSheet
+                  gathering={gathering}
+                  compact
+                  onOcrLines={onOcrLines}
+                  saveOcrLines={saveOcrLines}
+                />
               </div>
             )}
             <div className="form-grid">
@@ -317,16 +329,14 @@ export function GuestEditor({
                         />
                       )}
                       {showMenuRequest && (
-                        <label>
-                          {t('menuRequest')}
-                          <textarea
-                            value={member.menuRequest}
-                            onChange={(e) =>
-                              updateMember(member.id, { menuRequest: e.target.value })
-                            }
-                            placeholder={t('menuRequestPlaceholder')}
-                          />
-                        </label>
+                        <MenuOrderField
+                          value={member.menuRequest}
+                          onChange={(value) =>
+                            updateMember(member.id, { menuRequest: value })
+                          }
+                          ocrLines={ocrLines}
+                          placeholder={t('menuRequestPlaceholder')}
+                        />
                       )}
                     </div>
                   ))}
@@ -363,16 +373,16 @@ export function GuestEditor({
                   </>
                 )}
                 {showMenuRequest && (
-                  <label className="full" style={{ display: 'block', marginTop: '0.75rem' }}>
-                    {t('menuRequest')}
-                    <textarea
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <MenuOrderField
                       value={draft.menuRequest}
-                      onChange={(e) =>
-                        setDraft({ ...draft, menuRequest: e.target.value })
+                      onChange={(value) =>
+                        setDraft({ ...draft, menuRequest: value })
                       }
+                      ocrLines={ocrLines}
                       placeholder={t('menuRequestPlaceholder')}
                     />
-                  </label>
+                  </div>
                 )}
               </>
             )}

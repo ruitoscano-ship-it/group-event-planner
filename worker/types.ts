@@ -59,6 +59,7 @@ export type Gathering = {
   organizerEmail: string
   organizerPhone: string
   menuCardUrl: string
+  menuOcrLines: string[]
   menu: MenuItem[]
   attendees: Attendee[]
   messages: InboxMessage[]

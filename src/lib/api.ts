@@ -66,6 +66,12 @@ export const api = {
       { method: 'PUT', body: JSON.stringify({ menuCardUrl }) },
     )
   },
+  setMenuOcr(gatheringId: string, lines: string[]) {
+    return request<Gathering>(
+      `/api/gatherings/${encodeURIComponent(gatheringId)}/menu-ocr`,
+      { method: 'PUT', body: JSON.stringify({ lines }) },
+    )
+  },
   removeMenuItem(gatheringId: string, itemId: string) {
     return request<Gathering>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/menu/${encodeURIComponent(itemId)}`,

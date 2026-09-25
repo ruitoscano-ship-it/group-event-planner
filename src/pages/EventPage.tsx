@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AgeGroupPicker } from '../components/AgeGroupPicker'
 import { GuestEditor } from '../components/GuestEditor'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
+import { MenuOrderField } from '../components/MenuOrderField'
 import { MenuPicker } from '../components/MenuPicker'
 import { MenuSheet } from '../components/MenuSheet'
 import { useI18n } from '../i18n/I18nContext'
@@ -20,6 +21,7 @@ import {
   toggleMenuSelection,
   unitPriceForIds,
 } from '../lib/money'
+import { loadCachedOcrLines } from '../lib/menuOcr'
 import { buildEventReportHtml, openEventReport } from '../lib/report'
 import {
   detailsSavedKeys,
@@ -51,6 +53,7 @@ export function EventPage() {
     removeAttendee,
     markMessageRead,
     deleteMessage,
+    setMenuOcr,
   } = useGatherings()
   const gathering = getGathering(eventId)
   const [fetching, setFetching] = useState(!gathering)
@@ -101,6 +104,19 @@ export function EventPage() {
   const [guestMsg, setGuestMsg] = useState<string | null>(null)
   const [guestError, setGuestError] = useState(false)
   const [reportMsg, setReportMsg] = useState<string | null>(null)
+  const [ocrLines, setOcrLines] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!gathering?.menuCardUrl) {
+      setOcrLines([])
+      return
+    }
+    if (gathering.menuOcrLines?.length) {
+      setOcrLines(gathering.menuOcrLines)
+      return
+    }
+    setOcrLines(loadCachedOcrLines(gathering.menuCardUrl) || [])
+  }, [gathering?.menuCardUrl, gathering?.menuOcrLines])
 
   useEffect(() => {
     if (!eventId || gathering) {
@@ -859,7 +875,11 @@ export function EventPage() {
             {(gathering.menuCardUrl || gathering.menu.length > 0) && (
               <div className="menu-peek-bar">
                 <p className="sub">{t('menuPeekHint')}</p>
-                <MenuSheet gathering={gathering} />
+                <MenuSheet
+                  gathering={gathering}
+                  onOcrLines={setOcrLines}
+                  saveOcrLines={(lines) => setMenuOcr(gathering.id, lines)}
+                />
               </div>
             )}
             {guestMsg && (
@@ -1017,18 +1037,14 @@ export function EventPage() {
                           />
                         </div>
                         {gathering.menuCardUrl && (
-                          <label>
-                            {t('menuRequest')}
-                            <textarea
-                              value={member.menuRequest}
-                              onChange={(e) =>
-                                updateGuestMember(member.id, {
-                                  menuRequest: e.target.value,
-                                })
-                              }
-                              placeholder={t('menuRequestPlaceholder')}
-                            />
-                          </label>
+                          <MenuOrderField
+                            value={member.menuRequest}
+                            onChange={(value) =>
+                              updateGuestMember(member.id, { menuRequest: value })
+                            }
+                            ocrLines={ocrLines}
+                            placeholder={t('menuRequestPlaceholder')}
+                          />
                         )}
                       </div>
                     ))}
@@ -1066,19 +1082,16 @@ export function EventPage() {
                     emptyLabel={t('organizerNoMenu')}
                   />
                   {gathering.menuCardUrl && (
-                    <label
-                      className="full"
-                      style={{ display: 'block', marginTop: '0.85rem' }}
-                    >
-                      {t('menuRequest')}
-                      <textarea
+                    <div style={{ marginTop: '0.85rem' }}>
+                      <MenuOrderField
                         value={guestForm.menuRequest}
-                        onChange={(e) =>
-                          setGuestForm({ ...guestForm, menuRequest: e.target.value })
+                        onChange={(value) =>
+                          setGuestForm({ ...guestForm, menuRequest: value })
                         }
+                        ocrLines={ocrLines}
                         placeholder={t('menuRequestPlaceholder')}
                       />
-                    </label>
+                    </div>
                   )}
                 </>
               )}
@@ -1132,6 +1145,9 @@ export function EventPage() {
                     gathering={gathering}
                     attendee={a}
                     editing={editingGuestId === a.id}
+                    ocrLines={ocrLines}
+                    onOcrLines={setOcrLines}
+                    saveOcrLines={(lines) => setMenuOcr(gathering.id, lines)}
                     onToggleEdit={() =>
                       setEditingGuestId((id) => (id === a.id ? null : a.id))
                     }

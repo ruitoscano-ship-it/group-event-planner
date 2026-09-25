@@ -8,6 +8,7 @@ import {
 import { Link, useParams } from 'react-router-dom'
 import { AgeGroupPicker } from '../components/AgeGroupPicker'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
+import { MenuOrderField } from '../components/MenuOrderField'
 import { MenuPicker } from '../components/MenuPicker'
 import { MenuSheet } from '../components/MenuSheet'
 import { useI18n } from '../i18n/I18nContext'
@@ -23,6 +24,7 @@ import {
   unitPriceForIds,
 } from '../lib/money'
 import { pickFeedback, rsvpSuccessKeys } from '../lib/feedback'
+import { loadCachedOcrLines } from '../lib/menuOcr'
 import {
   clearRsvpDraft,
   loadGuestPrefs,
@@ -40,7 +42,8 @@ const STEPS: Step[] = ['who', 'menu', 'review']
 export function RsvpPage() {
   const { eventId = '' } = useParams()
   const { t, localeTag } = useI18n()
-  const { getGathering, ensureGathering, addAttendee, sendMessage } = useGatherings()
+  const { getGathering, ensureGathering, addAttendee, sendMessage, setMenuOcr } =
+    useGatherings()
   const gathering = getGathering(eventId)
   const formTopRef = useRef<HTMLElement | null>(null)
 
@@ -84,6 +87,19 @@ export function RsvpPage() {
   const [contactBusy, setContactBusy] = useState(false)
   const [contactMsg, setContactMsg] = useState<string | null>(null)
   const [contactError, setContactError] = useState(false)
+  const [ocrLines, setOcrLines] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!gathering?.menuCardUrl) {
+      setOcrLines([])
+      return
+    }
+    if (gathering.menuOcrLines?.length) {
+      setOcrLines(gathering.menuOcrLines)
+      return
+    }
+    setOcrLines(loadCachedOcrLines(gathering.menuCardUrl) || [])
+  }, [gathering?.menuCardUrl, gathering?.menuOcrLines])
 
   useEffect(() => {
     if (!eventId || gathering) {
@@ -626,7 +642,11 @@ export function RsvpPage() {
             {(gathering.menuCardUrl || gathering.menu.length > 0) && (
               <div className="menu-peek-bar">
                 <p className="sub">{t('menuPeekHint')}</p>
-                <MenuSheet gathering={gathering} />
+                <MenuSheet
+                  gathering={gathering}
+                  onOcrLines={setOcrLines}
+                  saveOcrLines={(lines) => setMenuOcr(gathering.id, lines)}
+                />
               </div>
             )}
 
@@ -697,16 +717,14 @@ export function RsvpPage() {
                         </div>
                       )}
                       {gathering.menuCardUrl && (
-                        <label>
-                          {t('menuRequest')}
-                          <textarea
-                            value={member.menuRequest}
-                            onChange={(e) =>
-                              updateMember(member.id, { menuRequest: e.target.value })
-                            }
-                            placeholder={t('menuRequestPlaceholder')}
-                          />
-                        </label>
+                        <MenuOrderField
+                          value={member.menuRequest}
+                          onChange={(value) =>
+                            updateMember(member.id, { menuRequest: value })
+                          }
+                          ocrLines={ocrLines}
+                          placeholder={t('menuRequestPlaceholder')}
+                        />
                       )}
                     </div>
                   ))}
@@ -738,14 +756,14 @@ export function RsvpPage() {
                   </>
                 )}
                 {gathering.menuCardUrl && (
-                  <label className="full" style={{ display: 'block', marginTop: '0.85rem' }}>
-                    {t('menuRequest')}
-                    <textarea
+                  <div style={{ marginTop: '0.85rem' }}>
+                    <MenuOrderField
                       value={menuRequest}
-                      onChange={(e) => setMenuRequest(e.target.value)}
+                      onChange={setMenuRequest}
+                      ocrLines={ocrLines}
                       placeholder={t('menuRequestPlaceholder')}
                     />
-                  </label>
+                  </div>
                 )}
                 {gathering.menu.length === 0 && !gathering.menuCardUrl && (
                   <div className="empty">{t('organizerNoMenu')}</div>
@@ -874,7 +892,12 @@ export function RsvpPage() {
               {step === 'menu' && (gathering.menuCardUrl || gathering.menu.length > 0) && (
                 <>
                   {' · '}
-                  <MenuSheet gathering={gathering} compact />
+                  <MenuSheet
+                    gathering={gathering}
+                    compact
+                    onOcrLines={setOcrLines}
+                    saveOcrLines={(lines) => setMenuOcr(gathering.id, lines)}
+                  />
                 </>
               )}
             </p>

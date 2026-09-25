@@ -30,6 +30,12 @@ function normalizeGathering(raw: Gathering): Gathering {
   return {
     ...raw,
     menuCardUrl: raw.menuCardUrl || '',
+    menuOcrLines: Array.isArray(raw.menuOcrLines)
+      ? raw.menuOcrLines
+          .map((line) => String(line || '').trim())
+          .filter(Boolean)
+          .slice(0, 120)
+      : [],
     organizerName: (raw.organizerName || '').trim(),
     organizerEmail: (raw.organizerEmail || '').trim(),
     organizerPhone: (raw.organizerPhone || '').trim(),
@@ -181,6 +187,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       organizerEmail: (body.organizerEmail || '').trim(),
       organizerPhone: (body.organizerPhone || '').trim(),
       menuCardUrl: (body.menuCardUrl || '').trim(),
+      menuOcrLines: [],
       menu: [],
       attendees: [],
       messages: [],
@@ -252,6 +259,24 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       return error('Image is too large. Use a smaller file or a link.', 413)
     }
     gathering.menuCardUrl = urlValue
+    if (!urlValue) gathering.menuOcrLines = []
+    await writeGathering(env.DB, gathering, false)
+    return json(gathering)
+  }
+
+  const menuOcrMatch = path.match(/^\/api\/gatherings\/([^/]+)\/menu-ocr$/)
+  if (menuOcrMatch && method === 'PUT') {
+    const id = decodeURIComponent(menuOcrMatch[1])
+    const gathering = await readGathering(env.DB, id)
+    if (!gathering) return error('Gathering not found', 404)
+    const body = (await request.json()) as { lines?: unknown }
+    const lines = Array.isArray(body.lines)
+      ? body.lines
+          .map((line) => String(line || '').trim())
+          .filter((line) => line.length >= 2 && line.length <= 120)
+          .slice(0, 120)
+      : []
+    gathering.menuOcrLines = lines
     await writeGathering(env.DB, gathering, false)
     return json(gathering)
   }
