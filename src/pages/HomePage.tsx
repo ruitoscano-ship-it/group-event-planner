@@ -18,6 +18,13 @@ export function HomePage() {
   const [accessBusy, setAccessBusy] = useState(false)
   const [accessError, setAccessError] = useState<string | null>(null)
 
+  function goHome() {
+    setMode('choose')
+    setAccessError(null)
+    setAccessCode('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   async function handleCreate(input: GatheringInput) {
     const created = await createGathering(input)
     navigate(`/events/${created.gathering.id}?created=1`, { viewTransition: true })
@@ -42,7 +49,12 @@ export function HomePage() {
   return (
     <>
       <header className="topbar">
-        <Link viewTransition to="/" className="brand">
+        <Link
+          viewTransition
+          to="/"
+          className="brand"
+          onClick={() => goHome()}
+        >
           <i className="brand-mark" aria-hidden />
           Round<span>.</span>
         </Link>
@@ -80,10 +92,7 @@ export function HomePage() {
           )}
 
           {mode === 'create' && (
-            <CreateEventChat
-              onCancel={() => setMode('choose')}
-              onCreate={handleCreate}
-            />
+            <CreateEventChat onCancel={goHome} onCreate={handleCreate} />
           )}
 
           {mode === 'code' && (
@@ -93,12 +102,9 @@ export function HomePage() {
                 <button
                   type="button"
                   className="btn btn-ghost btn-sm"
-                  onClick={() => {
-                    setMode('choose')
-                    setAccessError(null)
-                  }}
+                  onClick={goHome}
                 >
-                  {t('cancel')}
+                  {t('backToHome')}
                 </button>
               </div>
               <p className="sub">{t('accessWithCodeSub')}</p>
@@ -119,6 +125,13 @@ export function HomePage() {
                   />
                 </label>
                 <div className="form-actions">
+                  <button
+                    className="btn btn-ghost"
+                    type="button"
+                    onClick={goHome}
+                  >
+                    {t('backToHome')}
+                  </button>
                   <button className="btn btn-accent" type="submit" disabled={accessBusy}>
                     {accessBusy ? t('saving') : t('openWithCode')}
                   </button>
@@ -128,6 +141,53 @@ export function HomePage() {
           )}
         </div>
       </section>
+
+      {mode === 'choose' && (
+        <section className="home-about" aria-labelledby="home-about-title">
+          <h2 id="home-about-title">{t('homeAboutTitle')}</h2>
+          <p className="home-about-lede">{t('homeAboutLede')}</p>
+          <div className="home-about-grid">
+            <article>
+              <h3>{t('homeAboutMenuTitle')}</h3>
+              <p>{t('homeAboutMenuBody')}</p>
+            </article>
+            <article>
+              <h3>{t('homeAboutRsvpTitle')}</h3>
+              <p>{t('homeAboutRsvpBody')}</p>
+            </article>
+            <article>
+              <h3>{t('homeAboutMoneyTitle')}</h3>
+              <p>{t('homeAboutMoneyBody')}</p>
+            </article>
+          </div>
+        </section>
+      )}
+
+      <footer className="site-footer">
+        <div className="site-footer-brand">
+          <strong>
+            Round<span>.</span>
+          </strong>
+          <p>{t('footerTagline')}</p>
+        </div>
+        <div className="site-footer-cols">
+          <div>
+            <h3>{t('footerPrivacyTitle')}</h3>
+            <p>{t('footerPrivacyBody')}</p>
+          </div>
+          <div>
+            <h3>{t('footerDisclaimerTitle')}</h3>
+            <p>{t('footerDisclaimerBody')}</p>
+          </div>
+          <div>
+            <h3>{t('footerTermsTitle')}</h3>
+            <p>{t('footerTermsBody')}</p>
+          </div>
+        </div>
+        <p className="site-footer-copy">
+          {t('footerCopyright', { year: new Date().getFullYear() })}
+        </p>
+      </footer>
     </>
   )
 }

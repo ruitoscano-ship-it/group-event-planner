@@ -9,6 +9,30 @@ export const translations = {
     viewGatherings: 'Ver encontros',
     heroLede:
       'Planeie almoços e jantares com amigos — defina o menu, deixe todos confirmar presença, registe alergias e veja quem ainda deve.',
+    backToHome: 'Voltar ao início',
+    homeAboutTitle: 'O que o Round faz',
+    homeAboutLede:
+      'Uma mesa partilhada precisa de organização — Round trata do menu, das confirmações e das contas, sem folhas de cálculo.',
+    homeAboutMenuTitle: 'Menu e carta',
+    homeAboutMenuBody:
+      'Carregue a ementa, leia a carta com OCR, aprove os pratos e deixe cada pessoa escolher o que quer.',
+    homeAboutRsvpTitle: 'RSVP por pessoa',
+    homeAboutRsvpBody:
+      'Partilhe um link. Cada convidado (ou grupo) confirma presença, alergias e pedido — um RSVP único por email.',
+    homeAboutMoneyTitle: 'Contas claras',
+    homeAboutMoneyBody:
+      'Veja totais, quem já pagou e quem ainda deve. Exporte um relatório simples para a mesa ou para imprimir.',
+    footerTagline: 'Encontros de amigos, sem drama de organização.',
+    footerPrivacyTitle: 'Privacidade',
+    footerPrivacyBody:
+      'Os dados do evento ficam associados ao código do organizador e ao link de RSVP. Não vendemos dados nem usamos a informação para publicidade.',
+    footerDisclaimerTitle: 'Aviso',
+    footerDisclaimerBody:
+      'O Round é uma ferramenta de planeamento. Não processa pagamentos reais nem substitui o acordo entre amigos sobre valores, alergias ou reservas no restaurante.',
+    footerTermsTitle: 'Utilização',
+    footerTermsBody:
+      'Guarde o código do organizador em local seguro. Quem o tiver pode editar o evento. Os convidados só acedem ao RSVP através do link partilhado.',
+    footerCopyright: '© {year} Round. Feito para juntar amigos à mesa.',
     syncErrorTitle: 'Não foi possível sincronizar',
     retry: 'Tentar novamente',
     createGathering: 'Criar encontro',
@@ -368,6 +392,30 @@ export const translations = {
     viewGatherings: 'View gatherings',
     heroLede:
       'Plan lunches and dinners with friends — set the menu, let everyone RSVP themselves, track allergies, and see who still owes.',
+    backToHome: 'Back to home',
+    homeAboutTitle: 'What Round does',
+    homeAboutLede:
+      'A shared table needs a little structure — Round handles the menu, RSVPs, and who still owes, without the spreadsheet chaos.',
+    homeAboutMenuTitle: 'Menu & carte',
+    homeAboutMenuBody:
+      'Upload the menu card, OCR the dishes, approve the event carte, and let everyone pick what they want.',
+    homeAboutRsvpTitle: 'Per-person RSVP',
+    homeAboutRsvpBody:
+      'Share one link. Each guest (or group) confirms attendance, allergies, and order — one unique RSVP per email.',
+    homeAboutMoneyTitle: 'Clear money view',
+    homeAboutMoneyBody:
+      'See totals, who’s paid, and who’s still due. Export a simple report for the table or to print.',
+    footerTagline: 'Friend gatherings, without the planning drama.',
+    footerPrivacyTitle: 'Privacy',
+    footerPrivacyBody:
+      'Event data is tied to the organizer code and RSVP link. We don’t sell data or use it for advertising.',
+    footerDisclaimerTitle: 'Disclaimer',
+    footerDisclaimerBody:
+      'Round is a planning tool. It doesn’t process real payments and doesn’t replace agreements between friends about money, allergies, or restaurant bookings.',
+    footerTermsTitle: 'Usage',
+    footerTermsBody:
+      'Keep the organizer code safe. Anyone with it can edit the event. Guests only reach the RSVP through the shared link.',
+    footerCopyright: '© {year} Round. Made for friends around a table.',
     syncErrorTitle: 'Couldn’t sync',
     retry: 'Retry',
     createGathering: 'Create gathering',

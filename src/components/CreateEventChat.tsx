@@ -184,7 +184,7 @@ export function CreateEventChat({ onCancel, onCreate }: Props) {
           onClick={onCancel}
           disabled={saving}
         >
-          {t('cancel')}
+          {t('backToHome')}
         </button>
       </div>
 
@@ -206,9 +206,14 @@ export function CreateEventChat({ onCancel, onCreate }: Props) {
             placeholder={t('placeholderTitle')}
             autoComplete="off"
           />
-          <button className="btn btn-accent" type="submit" disabled={!form.title.trim()}>
-            {t('createChatContinue')}
-          </button>
+          <div className="create-chat-actions">
+            <button className="btn btn-ghost" type="button" onClick={onCancel}>
+              {t('backToHome')}
+            </button>
+            <button className="btn btn-accent" type="submit" disabled={!form.title.trim()}>
+              {t('createChatContinue')}
+            </button>
+          </div>
         </form>
       )}
 
