@@ -1,10 +1,11 @@
 import type { Attendee, Gathering, GroupMember } from '../types'
 import {
+  carteLabel,
   formatDate,
   formatMoney,
   gatheringTotals,
+  menuLabel,
   normalizeAgeGroup,
-  personOrderLabel,
 } from './money'
 
 export type ReportPerson = {
@@ -13,28 +14,29 @@ export type ReportPerson = {
   ageGroup: 'adult' | 'child'
   party: string
   menu: string
-  menuRequest: string
+  carte: string
+  extras: string
   allergies: string
   email: string
   phone: string
   notes: string
 }
 
+export type CarteTally = {
+  id: string
+  name: string
+  count: number
+}
+
 function personFromSolo(a: Attendee, gathering: Gathering): ReportPerson {
-  const cartePart = personOrderLabel(
-    [],
-    a.carteItemIds || [],
-    a.menuRequest || '',
-    gathering,
-    '',
-  )
   return {
     id: a.id,
     name: a.name,
     ageGroup: normalizeAgeGroup(a.ageGroup),
     party: a.name,
-    menu: personOrderLabel(a.menuItemIds, [], '', gathering, '—'),
-    menuRequest: cartePart || '—',
+    menu: menuLabel(a.menuItemIds, gathering.menu, '—'),
+    carte: carteLabel(a.carteItemIds || [], gathering.carteItems || [], '—'),
+    extras: (a.menuRequest || '').trim() || '—',
     allergies: (a.allergies || '').trim(),
     email: (a.email || '').trim(),
     phone: (a.phone || '').trim(),
@@ -47,20 +49,14 @@ function personFromMember(
   m: GroupMember,
   gathering: Gathering,
 ): ReportPerson {
-  const cartePart = personOrderLabel(
-    [],
-    m.carteItemIds || [],
-    m.menuRequest || '',
-    gathering,
-    '',
-  )
   return {
     id: `${a.id}-${m.id}`,
     name: m.name,
     ageGroup: normalizeAgeGroup(m.ageGroup),
     party: a.name,
-    menu: personOrderLabel(m.menuItemIds, [], '', gathering, '—'),
-    menuRequest: cartePart || '—',
+    menu: menuLabel(m.menuItemIds, gathering.menu, '—'),
+    carte: carteLabel(m.carteItemIds || [], gathering.carteItems || [], '—'),
+    extras: (m.menuRequest || '').trim() || '—',
     allergies: (m.allergies || '').trim(),
     email: (a.email || '').trim(),
     phone: (a.phone || '').trim(),
@@ -85,6 +81,31 @@ export function flattenInvitees(gathering: Gathering): ReportPerson[] {
   })
 }
 
+/** Count how many times each approved carte dish was picked. */
+export function tallyCartePicks(gathering: Gathering): CarteTally[] {
+  const counts = new Map<string, number>()
+  const bump = (ids: string[] | undefined) => {
+    for (const id of ids || []) {
+      counts.set(id, (counts.get(id) || 0) + 1)
+    }
+  }
+  for (const a of gathering.attendees) {
+    if (a.isGroup && a.members?.length) {
+      for (const m of a.members) bump(m.carteItemIds)
+    } else {
+      bump(a.carteItemIds)
+    }
+  }
+  return (gathering.carteItems || [])
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      count: counts.get(item.id) || 0,
+    }))
+    .filter((row) => row.count > 0)
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -95,7 +116,14 @@ function escapeHtml(value: string): string {
 
 function personRows(
   people: ReportPerson[],
-  labels: { menu: string; order: string; allergies: string; party: string; contact: string },
+  labels: {
+    menu: string
+    carte: string
+    extras: string
+    allergies: string
+    party: string
+    contact: string
+  },
 ): string {
   if (people.length === 0) {
     return `<p class="empty">—</p>`
@@ -107,7 +135,8 @@ function personRows(
           <th>#</th>
           <th>${escapeHtml(labels.party)}</th>
           <th>${escapeHtml(labels.menu)}</th>
-          <th>${escapeHtml(labels.order)}</th>
+          <th>${escapeHtml(labels.carte)}</th>
+          <th>${escapeHtml(labels.extras)}</th>
           <th>${escapeHtml(labels.allergies)}</th>
           <th>${escapeHtml(labels.contact)}</th>
         </tr>
@@ -124,9 +153,35 @@ function personRows(
               ${p.notes ? `<div class="muted">${escapeHtml(p.notes)}</div>` : ''}
             </td>
             <td>${escapeHtml(p.menu)}</td>
-            <td>${escapeHtml(p.menuRequest || '—')}</td>
+            <td>${escapeHtml(p.carte)}</td>
+            <td>${escapeHtml(p.extras)}</td>
             <td class="${p.allergies ? 'allergy' : ''}">${escapeHtml(p.allergies || '—')}</td>
             <td>${escapeHtml([p.email, p.phone].filter(Boolean).join(' · ') || '—')}</td>
+          </tr>`,
+          )
+          .join('')}
+      </tbody>
+    </table>
+  `
+}
+
+function carteTallyRows(rows: CarteTally[], labels: { dish: string; qty: string }): string {
+  if (rows.length === 0) return ''
+  return `
+    <table class="tally">
+      <thead>
+        <tr>
+          <th>${escapeHtml(labels.dish)}</th>
+          <th>${escapeHtml(labels.qty)}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows
+          .map(
+            (row) => `
+          <tr>
+            <td>${escapeHtml(row.name)}</td>
+            <td><strong>${row.count}</strong></td>
           </tr>`,
           )
           .join('')}
@@ -146,7 +201,8 @@ export type ReportLabels = {
   menuTotal: string
   stillDue: string
   menu: string
-  order: string
+  carte: string
+  extras: string
   allergies: string
   party: string
   contact: string
@@ -154,6 +210,10 @@ export type ReportLabels = {
   noGuests: string
   dateTbd: string
   locationTbd: string
+  carteTally: string
+  dish: string
+  qty: string
+  noCartePicks: string
 }
 
 export function buildEventReportHtml(
@@ -167,6 +227,7 @@ export function buildEventReportHtml(
   const totals = gatheringTotals(gathering)
   const owed = totals.owed
   const outstanding = totals.outstanding
+  const carteTally = tallyCartePicks(gathering)
   const when = [
     formatDate(gathering.date, localeTag, labels.dateTbd),
     gathering.time,
@@ -177,11 +238,15 @@ export function buildEventReportHtml(
 
   const tableLabels = {
     menu: labels.menu,
-    order: labels.order,
+    carte: labels.carte,
+    extras: labels.extras,
     allergies: labels.allergies,
     party: labels.party,
     contact: labels.contact,
   }
+
+  const showCarteSection =
+    Boolean(gathering.carteApproved) && (gathering.carteItems || []).length > 0
 
   return `<!DOCTYPE html>
 <html lang="${escapeHtml(localeTag)}">
@@ -199,7 +264,7 @@ export function buildEventReportHtml(
       background: #f3f7f5;
       line-height: 1.45;
     }
-    .wrap { max-width: 960px; margin: 0 auto; padding: 1.5rem 1.1rem 3rem; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.1rem 3rem; }
     h1 { font-family: "Bricolage Grotesque", Georgia, serif; font-size: 1.8rem; margin: 0 0 0.35rem; }
     h2 { font-family: "Bricolage Grotesque", Georgia, serif; font-size: 1.25rem; margin: 1.6rem 0 0.65rem; }
     .meta { color: #5d726c; margin: 0 0 0.35rem; }
@@ -211,14 +276,16 @@ export function buildEventReportHtml(
     table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; }
     th, td { text-align: left; padding: 0.7rem 0.75rem; border-bottom: 1px solid rgba(6,40,35,0.08); vertical-align: top; font-size: 0.92rem; }
     th { background: #e4eeea; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #1a3d37; }
+    table.tally { max-width: 420px; }
+    table.tally td:last-child, table.tally th:last-child { text-align: right; width: 4.5rem; }
     .muted { color: #5d726c; font-size: 0.82rem; margin-top: 0.2rem; }
     .allergy { color: #8e2a21; font-weight: 600; }
     .empty { color: #5d726c; }
     .section { margin-bottom: 0.5rem; }
     .count { color: #5d726c; font-weight: 600; font-size: 0.95rem; }
-    @media (max-width: 720px) {
+    @media (max-width: 820px) {
       .cards { grid-template-columns: 1fr 1fr; }
-      th:nth-child(6), td:nth-child(6) { display: none; }
+      th:nth-child(7), td:nth-child(7) { display: none; }
     }
     @media print {
       body { background: #fff; }
@@ -245,6 +312,19 @@ export function buildEventReportHtml(
       <div class="card"><span>${escapeHtml(labels.menuTotal)}</span><strong>${escapeHtml(formatMoney(owed, gathering.currency, localeTag))}</strong></div>
       <div class="card"><span>${escapeHtml(labels.stillDue)}</span><strong>${escapeHtml(formatMoney(outstanding, gathering.currency, localeTag))}</strong></div>
     </div>
+
+    ${
+      showCarteSection
+        ? `<section class="section">
+      <h2>${escapeHtml(labels.carteTally)}</h2>
+      ${
+        carteTally.length
+          ? carteTallyRows(carteTally, { dish: labels.dish, qty: labels.qty })
+          : `<p class="empty">${escapeHtml(labels.noCartePicks)}</p>`
+      }
+    </section>`
+        : ''
+    }
 
     <section class="section">
       <h2>${escapeHtml(labels.adults)} <span class="count">(${adults.length})</span></h2>

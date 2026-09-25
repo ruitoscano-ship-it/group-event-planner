@@ -2006,6 +2006,71 @@ textarea {
 .carte-picker {
   display: grid;
   gap: 0.45rem;
+  border: 1px solid rgba(0, 107, 95, 0.16);
+  border-radius: 14px;
+  background: #f7fbf9;
+  overflow: hidden;
+}
+
+.carte-picker-summary {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 0.9rem;
+  cursor: pointer;
+  list-style: none;
+  font: inherit;
+}
+
+.carte-picker-summary::-webkit-details-marker {
+  display: none;
+}
+
+.carte-picker-summary::before {
+  content: '▸';
+  float: right;
+  color: var(--accent, #006b5f);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  transition: transform 0.15s ease;
+}
+
+.carte-picker[open] > .carte-picker-summary::before {
+  transform: rotate(90deg);
+}
+
+.carte-picker-summary-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.carte-picker-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(0, 107, 95, 0.12);
+  color: var(--accent, #006b5f);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.carte-picker-summary-picks {
+  color: var(--ink-soft, #5d726c);
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.carte-picker-body {
+  padding: 0 0.85rem 0.85rem;
+  display: grid;
+  gap: 0.45rem;
+  border-top: 1px solid rgba(0, 107, 95, 0.1);
+  padding-top: 0.7rem;
+  margin: 0 0.05rem;
 }
 
 .carte-picker-hint {
