@@ -12,6 +12,7 @@ import {
 import type { Attendee, Gathering, GroupMember } from '../types'
 import { AgeGroupPicker } from './AgeGroupPicker'
 import { MenuPicker } from './MenuPicker'
+import { MenuSheet } from './MenuSheet'
 
 type Props = {
   gathering: Gathering
@@ -194,6 +195,12 @@ export function GuestEditor({
                 role="status"
               >
                 {msg}
+              </div>
+            )}
+            {(gathering.menuCardUrl || gathering.menu.length > 0) && (
+              <div className="menu-peek-bar">
+                <p className="sub">{t('menuPeekHint')}</p>
+                <MenuSheet gathering={gathering} compact />
               </div>
             )}
             <div className="form-grid">

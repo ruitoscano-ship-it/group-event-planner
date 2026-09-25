@@ -1747,6 +1747,133 @@ textarea {
   margin-bottom: 0.65rem;
 }
 
+.menu-peek-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #e8f6f1 0%, #f7fcfa 100%);
+  border: 1px solid rgba(0, 107, 95, 0.16);
+}
+
+.menu-peek-bar .sub {
+  margin: 0;
+  flex: 1 1 12rem;
+}
+
+.menu-peek-btn {
+  flex-shrink: 0;
+  border-color: rgba(0, 107, 95, 0.28) !important;
+  font-weight: 800;
+}
+
+.menu-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(6, 40, 35, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0.75rem;
+  animation: rise 0.2s ease both;
+}
+
+.menu-sheet {
+  width: min(720px, 100%);
+  max-height: min(88vh, 900px);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 20px 20px 16px 16px;
+  box-shadow: 0 24px 60px rgba(6, 40, 35, 0.28);
+  overflow: hidden;
+}
+
+.menu-sheet-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--line);
+  background: #f4faf8;
+}
+
+.menu-sheet-head h2 {
+  margin: 0 0 0.2rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.menu-sheet-head .sub {
+  margin: 0;
+}
+
+.menu-sheet-body {
+  overflow: auto;
+  padding: 1rem 1.1rem 1.25rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.menu-sheet-card {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.menu-sheet-card img {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.menu-sheet-list h3 {
+  margin: 0 0 0.55rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+.menu-sheet-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.menu-sheet-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f7fbf9;
+}
+
+.menu-sheet-list li p {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+@media (min-width: 720px) {
+  .menu-sheet-backdrop {
+    align-items: center;
+  }
+
+  .menu-sheet {
+    border-radius: 20px;
+  }
+}
+
 .age-group-picker {
   margin: 0;
   padding: 0;

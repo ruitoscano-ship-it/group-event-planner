@@ -4,6 +4,7 @@ import { AgeGroupPicker } from '../components/AgeGroupPicker'
 import { GuestEditor } from '../components/GuestEditor'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { MenuPicker } from '../components/MenuPicker'
+import { MenuSheet } from '../components/MenuSheet'
 import { useI18n } from '../i18n/I18nContext'
 import {
   attendeeTotal,
@@ -19,6 +20,7 @@ import {
   toggleMenuSelection,
   unitPriceForIds,
 } from '../lib/money'
+import { buildEventReportHtml, openEventReport } from '../lib/report'
 import {
   detailsSavedKeys,
   guestAddedKeys,
@@ -97,6 +99,7 @@ export function EventPage() {
   const [guestBusy, setGuestBusy] = useState(false)
   const [guestMsg, setGuestMsg] = useState<string | null>(null)
   const [guestError, setGuestError] = useState(false)
+  const [reportMsg, setReportMsg] = useState<string | null>(null)
 
   useEffect(() => {
     if (!eventId || gathering) {
@@ -199,6 +202,37 @@ export function EventPage() {
     } catch {
       setCopied(false)
     }
+  }
+
+  function openFullReport() {
+    if (!gathering) return
+    setReportMsg(null)
+    const html = buildEventReportHtml(
+      gathering,
+      {
+        title: t('eventReportTitle'),
+        generated: t('reportGenerated'),
+        adults: t('adultsCount'),
+        children: t('childrenCount'),
+        summary: t('reportSummary'),
+        invites: t('invites'),
+        people: t('peopleTotal'),
+        menuTotal: t('menuTotal'),
+        stillDue: t('stillDue'),
+        menu: t('pickFromMenu'),
+        order: t('menuRequest'),
+        allergies: t('allergiesDietary'),
+        party: t('reportPerson'),
+        contact: t('rsvpContact'),
+        printHint: t('reportPrintHint'),
+        noGuests: t('reportNoPeople'),
+        dateTbd: t('dateTbd'),
+        locationTbd: t('locationTbd'),
+      },
+      localeTag,
+    )
+    const ok = openEventReport(html)
+    if (!ok) setReportMsg(t('reportPopupBlocked'))
   }
 
   async function onSaveDetails(e: FormEvent) {
@@ -532,7 +566,15 @@ export function EventPage() {
         <button className="btn btn-sm btn-accent" type="button" onClick={() => void copyLink()}>
           {copied ? t('copied') : t('copyLink')}
         </button>
+        <button className="btn btn-sm btn-ghost" type="button" onClick={openFullReport}>
+          {t('openEventReport')}
+        </button>
       </div>
+      {reportMsg && (
+        <p className="allergy" style={{ marginTop: '-0.5rem', marginBottom: '1rem' }}>
+          {reportMsg}
+        </p>
+      )}
 
       <div className="tabs">
         {([
@@ -748,6 +790,12 @@ export function EventPage() {
           <section className="panel">
             <h2>{t('organizerRegister')}</h2>
             <p className="sub">{t('organizerRegisterSub')}</p>
+            {(gathering.menuCardUrl || gathering.menu.length > 0) && (
+              <div className="menu-peek-bar">
+                <p className="sub">{t('menuPeekHint')}</p>
+                <MenuSheet gathering={gathering} />
+              </div>
+            )}
             {guestMsg && (
               <div
                 className={`feedback-banner ${guestError ? 'error' : ''}`}
@@ -1003,6 +1051,11 @@ export function EventPage() {
           <section className="panel">
             <h2>{t('whosComing')}</h2>
             <p className="sub">{t('whosComingSub')}</p>
+            <div className="form-actions" style={{ marginBottom: '0.85rem' }}>
+              <button className="btn btn-accent btn-sm" type="button" onClick={openFullReport}>
+                {t('openEventReport')}
+              </button>
+            </div>
             {gathering.attendees.length === 0 ? (
               <div className="empty">{t('noRsvpsYet')}</div>
             ) : (

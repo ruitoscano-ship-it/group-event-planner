@@ -9,6 +9,7 @@ import { Link, useParams } from 'react-router-dom'
 import { AgeGroupPicker } from '../components/AgeGroupPicker'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { MenuPicker } from '../components/MenuPicker'
+import { MenuSheet } from '../components/MenuSheet'
 import { useI18n } from '../i18n/I18nContext'
 import {
   attendeeTotal,
@@ -622,8 +623,15 @@ export function RsvpPage() {
             <h2>{t('rsvpStepMenuTitle')}</h2>
             <p className="sub">{t('rsvpStepMenuSub')}</p>
 
+            {(gathering.menuCardUrl || gathering.menu.length > 0) && (
+              <div className="menu-peek-bar">
+                <p className="sub">{t('menuPeekHint')}</p>
+                <MenuSheet gathering={gathering} />
+              </div>
+            )}
+
             {gathering.menuCardUrl && (
-              <details className="collapsible-details" open>
+              <details className="collapsible-details">
                 <summary>{t('viewMenuCard')}</summary>
                 <div className="menu-card-preview">
                   <img src={gathering.menuCardUrl} alt={t('menuCard')} />
@@ -863,6 +871,12 @@ export function RsvpPage() {
                 {formatMoney(estimated, gathering.currency, localeTag)}
                 {hasAlaCartePick ? '+' : ''}
               </strong>
+              {step === 'menu' && (gathering.menuCardUrl || gathering.menu.length > 0) && (
+                <>
+                  {' · '}
+                  <MenuSheet gathering={gathering} compact />
+                </>
+              )}
             </p>
           )}
         </div>
