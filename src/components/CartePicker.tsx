@@ -20,9 +20,7 @@ export function CartePicker({
   defaultOpen,
 }: Props) {
   const { t } = useI18n()
-  const [open, setOpen] = useState(
-    () => defaultOpen ?? selectedIds.length === 0,
-  )
+  const [open, setOpen] = useState(() => defaultOpen ?? false)
 
   if (items.length === 0) {
     return <p className="sub">{emptyLabel || t('carteEmpty')}</p>
