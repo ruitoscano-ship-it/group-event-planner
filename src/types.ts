@@ -80,6 +80,8 @@ export type Gathering = {
   attendees: Attendee[]
   messages: InboxMessage[]
   createdAt: string
+  /** ISO timestamp when admin archived the event */
+  archivedAt?: string | null
 }
 
 /** Returned only from create / unlock — includes the manage code. */

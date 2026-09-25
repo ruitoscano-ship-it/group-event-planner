@@ -76,6 +76,8 @@ export type Gathering = {
   attendees: Attendee[]
   messages: InboxMessage[]
   createdAt: string
+  /** ISO timestamp when admin archived the event; null/undefined = active */
+  archivedAt?: string | null
 }
 
 export type GatheringInput = {
@@ -101,4 +103,6 @@ export type MessageInput = {
 
 export type Env = {
   DB: D1Database
+  /** Set via `wrangler secret put ADMIN_PASSWORD` (min 8 chars). */
+  ADMIN_PASSWORD?: string
 }

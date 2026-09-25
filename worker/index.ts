@@ -7,6 +7,13 @@ import type {
   MenuItem,
   MessageInput,
 } from './types'
+import {
+  adminConfigured,
+  mintAdminToken,
+  readAdminBearer,
+  verifyAdminPassword,
+  verifyAdminToken,
+} from './adminAuth'
 
 const SECURITY_HEADERS: Record<string, string> = {
   'Content-Type': 'application/json',
@@ -233,6 +240,7 @@ function normalizeGathering(raw: Gathering & { menuOcrLines?: string[] }): Gathe
     organizerName: clip(raw.organizerName, MAX_NAME),
     organizerEmail: clip(raw.organizerEmail, MAX_TEXT),
     organizerPhone: clip(raw.organizerPhone, 40),
+    archivedAt: raw.archivedAt || null,
     menu: (raw.menu || []).slice(0, MAX_MENU_ITEMS).map((m) => ({
       ...m,
       name: clip(m.name, MAX_NAME),
@@ -332,19 +340,121 @@ async function writeGathering(db: D1Database, gathering: Gathering, isNew: boole
   if (payload.length > 2_500_000) {
     throw new Error('Gathering payload too large')
   }
+  const archivedAt = normalized.archivedAt || null
   if (isNew) {
     await db
       .prepare(
-        'INSERT INTO gatherings (id, data, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        'INSERT INTO gatherings (id, data, created_at, updated_at, archived_at) VALUES (?, ?, ?, ?, ?)',
       )
-      .bind(normalized.id, payload, normalized.createdAt || now, now)
+      .bind(normalized.id, payload, normalized.createdAt || now, now, archivedAt)
       .run()
   } else {
     await db
-      .prepare('UPDATE gatherings SET data = ?, updated_at = ? WHERE id = ?')
-      .bind(payload, now, normalized.id)
+      .prepare(
+        'UPDATE gatherings SET data = ?, updated_at = ?, archived_at = ? WHERE id = ?',
+      )
+      .bind(payload, now, archivedAt, normalized.id)
       .run()
   }
+}
+
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function isPastEvent(gathering: Gathering): boolean {
+  const date = (gathering.date || '').trim()
+  if (!date) return false
+  return date < todayIsoDate()
+}
+
+function partyHeadcount(gathering: Gathering): number {
+  return (gathering.attendees || []).reduce((sum, a) => {
+    if (a.isGroup && a.members?.length) return sum + a.members.length
+    return sum + Math.max(1, Number(a.groupSize) || 1)
+  }, 0)
+}
+
+type AdminEventRow = {
+  id: string
+  title: string
+  type: Gathering['type']
+  date: string
+  time: string
+  location: string
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+  attendeeCount: number
+  peopleCount: number
+  messageCount: number
+  menuCount: number
+  organizerName: string
+  organizerCode: string
+  isPast: boolean
+}
+
+function toAdminRow(
+  gathering: Gathering,
+  updatedAt: string,
+): AdminEventRow {
+  return {
+    id: gathering.id,
+    title: gathering.title,
+    type: gathering.type,
+    date: gathering.date || '',
+    time: gathering.time || '',
+    location: gathering.location || '',
+    createdAt: gathering.createdAt,
+    updatedAt,
+    archivedAt: gathering.archivedAt || null,
+    attendeeCount: (gathering.attendees || []).length,
+    peopleCount: partyHeadcount(gathering),
+    messageCount: (gathering.messages || []).length,
+    menuCount: (gathering.menu || []).length,
+    organizerName: gathering.organizerName || '',
+    organizerCode: gathering.organizerCode || '',
+    isPast: isPastEvent(gathering),
+  }
+}
+
+async function requireAdmin(request: Request, env: Env): Promise<Response | null> {
+  if (!adminConfigured(env)) {
+    return error('Admin is not configured on this deployment', 503)
+  }
+  const token = readAdminBearer(request)
+  if (!(await verifyAdminToken(env, token))) {
+    return error('Admin authentication required', 401)
+  }
+  return null
+}
+
+async function listAdminRows(db: D1Database): Promise<AdminEventRow[]> {
+  const { results } = await db
+    .prepare(
+      'SELECT id, data, created_at, updated_at, archived_at FROM gatherings ORDER BY created_at DESC LIMIT 500',
+    )
+    .all<{
+      id: string
+      data: string
+      created_at: string
+      updated_at: string
+      archived_at: string | null
+    }>()
+
+  const rows: AdminEventRow[] = []
+  for (const row of results ?? []) {
+    try {
+      const gathering = normalizeGathering(JSON.parse(row.data) as Gathering)
+      if (!gathering.archivedAt && row.archived_at) {
+        gathering.archivedAt = row.archived_at
+      }
+      rows.push(toAdminRow(gathering, row.updated_at || gathering.createdAt))
+    } catch {
+      // skip corrupt rows
+    }
+  }
+  return rows
 }
 
 async function readJsonBody<T>(request: Request): Promise<T | Response> {
@@ -432,6 +542,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       .map((row) => {
         try {
           const gathering = normalizeGathering(JSON.parse(row.data) as Gathering)
+          if (gathering.archivedAt) return null
           // List endpoint is unauthenticated — always redact PII
           return toClientGathering(gathering, false)
         } catch {
@@ -509,6 +620,9 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (method === 'GET') {
       const gathering = await readGathering(env.DB, id)
       if (!gathering) return error('Gathering not found', 404)
+      if (gathering.archivedAt && !isOrganizerAuthorized(request, gathering)) {
+        return error('Gathering not found', 404)
+      }
       const authorized = isOrganizerAuthorized(request, gathering)
       return json(toClientGathering(gathering, authorized))
     }
@@ -749,6 +863,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const id = decodeURIComponent(attendeesMatch[1])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
+    if (gathering.archivedAt) return error('This event is archived', 410)
     const asOrganizer = isOrganizerAuthorized(request, gathering)
     const bodyOrErr = await readJsonBody<
       Omit<Attendee, 'id' | 'createdAt' | 'amountPaid' | 'guestKey'> & {
@@ -967,6 +1082,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const id = decodeURIComponent(messagesMatch[1])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
+    if (gathering.archivedAt) return error('This event is archived', 410)
     const bodyOrErr = await readJsonBody<MessageInput>(request)
     if (bodyOrErr instanceof Response) return bodyOrErr
     const body = bodyOrErr
@@ -1014,6 +1130,145 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       gathering.messages = gathering.messages.filter((m) => m.id !== messageId)
       await writeGathering(env.DB, gathering, false)
       return json(toClientGathering(gathering, true))
+    }
+  }
+
+  // ——— Admin backoffice ———
+  if (path === '/api/admin/login' && method === 'POST') {
+    const limited = rateLimit(request, 'admin-login', 8, 60_000)
+    if (limited) return limited
+    if (!adminConfigured(env)) {
+      return error('Admin is not configured. Set ADMIN_PASSWORD with wrangler secret.', 503)
+    }
+    const bodyOrErr = await readJsonBody<{ password?: string }>(request)
+    if (bodyOrErr instanceof Response) return bodyOrErr
+    const password = String(bodyOrErr.password || '')
+    if (!(await verifyAdminPassword(env, password))) {
+      return error('Invalid admin password', 401)
+    }
+    const session = await mintAdminToken(env)
+    return json({
+      token: session.token,
+      expiresAt: session.expiresAt,
+    })
+  }
+
+  if (path === '/api/admin/stats' && method === 'GET') {
+    const denied = await requireAdmin(request, env)
+    if (denied) return denied
+    const rows = await listAdminRows(env.DB)
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+    const stats = {
+      total: rows.length,
+      active: rows.filter((r) => !r.archivedAt).length,
+      archived: rows.filter((r) => Boolean(r.archivedAt)).length,
+      past: rows.filter((r) => r.isPast && !r.archivedAt).length,
+      createdLast7Days: rows.filter((r) => {
+        const t = Date.parse(r.createdAt)
+        return Number.isFinite(t) && t >= weekAgo
+      }).length,
+      attendeesTotal: rows.reduce((sum, r) => sum + r.attendeeCount, 0),
+      peopleTotal: rows.reduce((sum, r) => sum + r.peopleCount, 0),
+    }
+    return json(stats)
+  }
+
+  if (path === '/api/admin/events' && method === 'GET') {
+    const denied = await requireAdmin(request, env)
+    if (denied) return denied
+    const filter = (url.searchParams.get('filter') || 'all').toLowerCase()
+    let rows = await listAdminRows(env.DB)
+    if (filter === 'active') rows = rows.filter((r) => !r.archivedAt)
+    else if (filter === 'archived') rows = rows.filter((r) => Boolean(r.archivedAt))
+    else if (filter === 'past') rows = rows.filter((r) => r.isPast && !r.archivedAt)
+    else if (filter === 'recent') {
+      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+      rows = rows.filter((r) => {
+        const t = Date.parse(r.createdAt)
+        return Number.isFinite(t) && t >= weekAgo
+      })
+    }
+    return json({ events: rows, generatedAt: new Date().toISOString() })
+  }
+
+  if (path === '/api/admin/events/purge-past' && method === 'POST') {
+    const denied = await requireAdmin(request, env)
+    if (denied) return denied
+    const bodyOrErr = await readJsonBody<{ onlyArchived?: boolean }>(request)
+    if (bodyOrErr instanceof Response) return bodyOrErr
+    const onlyArchived = bodyOrErr.onlyArchived !== false
+    const rows = await listAdminRows(env.DB)
+    const targets = rows.filter((r) => {
+      if (!r.isPast) return false
+      if (onlyArchived) return Boolean(r.archivedAt)
+      return true
+    })
+    let deleted = 0
+    for (const row of targets) {
+      const result = await env.DB.prepare('DELETE FROM gatherings WHERE id = ?')
+        .bind(row.id)
+        .run()
+      if (result.meta.changes) deleted += 1
+    }
+    return json({ deleted, matched: targets.length })
+  }
+
+  const adminEventMatch = path.match(/^\/api\/admin\/events\/([^/]+)$/)
+  if (adminEventMatch) {
+    const id = decodeURIComponent(adminEventMatch[1])
+    const denied = await requireAdmin(request, env)
+    if (denied) return denied
+
+    if (method === 'GET') {
+      const gathering = await readGathering(env.DB, id)
+      if (!gathering) return error('Gathering not found', 404)
+      const row = await env.DB.prepare(
+        'SELECT updated_at FROM gatherings WHERE id = ?',
+      )
+        .bind(id)
+        .first<{ updated_at: string }>()
+      return json({
+        summary: toAdminRow(gathering, row?.updated_at || gathering.createdAt),
+        gathering: {
+          ...gathering,
+          // include code for support; strip guest keys from attendees
+          attendees: (gathering.attendees || []).map((a) => {
+            const { guestKey: _gk, ...rest } = a
+            return {
+              ...rest,
+              members: (a.members || []).map((m) => ({ ...m })),
+            }
+          }),
+        },
+      })
+    }
+
+    if (method === 'PATCH') {
+      const gathering = await readGathering(env.DB, id)
+      if (!gathering) return error('Gathering not found', 404)
+      const bodyOrErr = await readJsonBody<{ archived?: boolean }>(request)
+      if (bodyOrErr instanceof Response) return bodyOrErr
+      if (typeof bodyOrErr.archived !== 'boolean') {
+        return error('Provide { archived: true | false }')
+      }
+      gathering.archivedAt = bodyOrErr.archived ? new Date().toISOString() : null
+      await writeGathering(env.DB, gathering, false)
+      const row = await env.DB.prepare(
+        'SELECT updated_at FROM gatherings WHERE id = ?',
+      )
+        .bind(id)
+        .first<{ updated_at: string }>()
+      return json({
+        summary: toAdminRow(gathering, row?.updated_at || gathering.createdAt),
+      })
+    }
+
+    if (method === 'DELETE') {
+      const result = await env.DB.prepare('DELETE FROM gatherings WHERE id = ?')
+        .bind(id)
+        .run()
+      if (!result.meta.changes) return error('Gathering not found', 404)
+      return json({ ok: true, id })
     }
   }
 
