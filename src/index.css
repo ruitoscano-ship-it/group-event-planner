@@ -37,6 +37,11 @@
   box-sizing: border-box;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 html,
 body,
 #root {
@@ -1433,6 +1438,150 @@ textarea {
   .hide-on-narrow {
     display: none;
   }
+
+  .sticky-actions .form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sticky-actions .estimate-block {
+    width: 100%;
+  }
+
+  .event-carte-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .carte-edit-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .carte-edit-index {
+    display: none;
+  }
+
+  .carte-add-row {
+    grid-template-columns: 1fr;
+  }
+
+  .carte-add-row .btn {
+    width: 100%;
+  }
+
+  .guest-row-head,
+  .inbox-item-head,
+  .member-card-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .guest-row-head .row-actions,
+  .inbox-item-head .row-actions,
+  .member-card-head .btn {
+    width: 100%;
+  }
+
+  .menu-peek-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .menu-peek-btn {
+    width: 100%;
+  }
+
+  .rsvp-step {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    padding: 0.55rem 0.5rem;
+  }
+
+  .rsvp-review-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+  }
+
+  .rsvp-review-row strong {
+    text-align: left;
+  }
+
+  .rsvp-sticky-estimate {
+    text-align: left;
+    width: 100%;
+  }
+
+  .rsvp-nav-actions {
+    flex-direction: column;
+  }
+
+  .rsvp-nav-actions .btn {
+    width: 100%;
+  }
+
+  .menu-sheet-head {
+    flex-wrap: wrap;
+  }
+
+  .menu-sheet-head .btn {
+    width: 100%;
+  }
+
+  .menu-sheet-list li {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .menu-zoom-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .tabs {
+    margin-left: -0.15rem;
+    margin-right: -0.15rem;
+    padding-left: 0.15rem;
+    padding-right: 0.15rem;
+  }
+
+  .tab {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 560px) {
+  .details-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell {
+    width: calc(100% - 0.9rem);
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .btn-sm {
+    min-height: 44px;
+  }
+
+  .carte-edit-row {
+    grid-template-columns: 1fr;
+  }
+
+  .carte-edit-row .btn {
+    width: 100%;
+  }
+
+  .person-picks,
+  .member-picks {
+    font-size: 0.88rem;
+  }
 }
 
 @keyframes rise {
@@ -1797,12 +1946,6 @@ textarea {
   font-size: 0.98rem;
   font-weight: 700;
   word-break: break-word;
-}
-
-@media (max-width: 560px) {
-  .details-summary {
-    grid-template-columns: 1fr;
-  }
 }
 
 .menu-peek-bar {

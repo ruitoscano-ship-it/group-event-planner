@@ -114,7 +114,7 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;')
 }
 
-function personRows(
+function personCards(
   people: ReportPerson[],
   labels: {
     menu: string
@@ -129,64 +129,63 @@ function personRows(
     return `<p class="empty">—</p>`
   }
   return `
-    <table>
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>${escapeHtml(labels.party)}</th>
-          <th>${escapeHtml(labels.menu)}</th>
-          <th>${escapeHtml(labels.carte)}</th>
-          <th>${escapeHtml(labels.extras)}</th>
-          <th>${escapeHtml(labels.allergies)}</th>
-          <th>${escapeHtml(labels.contact)}</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${people
-          .map(
-            (p, i) => `
-          <tr>
-            <td>${i + 1}</td>
-            <td>
+    <div class="people">
+      ${people
+        .map((p, i) => {
+          const contact = [p.email, p.phone].filter(Boolean).join(' · ')
+          return `
+        <article class="person">
+          <header class="person-head">
+            <span class="person-num">${i + 1}</span>
+            <div class="person-who">
               <strong>${escapeHtml(p.name)}</strong>
               ${p.party !== p.name ? `<div class="muted">${escapeHtml(p.party)}</div>` : ''}
               ${p.notes ? `<div class="muted">${escapeHtml(p.notes)}</div>` : ''}
-            </td>
-            <td>${escapeHtml(p.menu)}</td>
-            <td>${escapeHtml(p.carte)}</td>
-            <td>${escapeHtml(p.extras)}</td>
-            <td class="${p.allergies ? 'allergy' : ''}">${escapeHtml(p.allergies || '—')}</td>
-            <td>${escapeHtml([p.email, p.phone].filter(Boolean).join(' · ') || '—')}</td>
-          </tr>`,
-          )
-          .join('')}
-      </tbody>
-    </table>
+            </div>
+          </header>
+          <dl class="person-fields">
+            <div>
+              <dt>${escapeHtml(labels.menu)}</dt>
+              <dd>${escapeHtml(p.menu)}</dd>
+            </div>
+            <div>
+              <dt>${escapeHtml(labels.carte)}</dt>
+              <dd>${escapeHtml(p.carte)}</dd>
+            </div>
+            <div>
+              <dt>${escapeHtml(labels.extras)}</dt>
+              <dd>${escapeHtml(p.extras)}</dd>
+            </div>
+            <div>
+              <dt>${escapeHtml(labels.allergies)}</dt>
+              <dd class="${p.allergies ? 'allergy' : ''}">${escapeHtml(p.allergies || '—')}</dd>
+            </div>
+            <div class="person-contact">
+              <dt>${escapeHtml(labels.contact)}</dt>
+              <dd>${escapeHtml(contact || '—')}</dd>
+            </div>
+          </dl>
+        </article>`
+        })
+        .join('')}
+    </div>
   `
 }
 
-function carteTallyRows(rows: CarteTally[], labels: { dish: string; qty: string }): string {
+function carteTallyRows(rows: CarteTally[]): string {
   if (rows.length === 0) return ''
   return `
-    <table class="tally">
-      <thead>
-        <tr>
-          <th>${escapeHtml(labels.dish)}</th>
-          <th>${escapeHtml(labels.qty)}</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows
-          .map(
-            (row) => `
-          <tr>
-            <td>${escapeHtml(row.name)}</td>
-            <td><strong>${row.count}</strong></td>
-          </tr>`,
-          )
-          .join('')}
-      </tbody>
-    </table>
+    <ul class="tally-list">
+      ${rows
+        .map(
+          (row) => `
+        <li>
+          <span>${escapeHtml(row.name)}</span>
+          <strong>${row.count}</strong>
+        </li>`,
+        )
+        .join('')}
+    </ul>
   `
 }
 
@@ -252,11 +251,13 @@ export function buildEventReportHtml(
 <html lang="${escapeHtml(localeTag)}">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
   <title>${escapeHtml(labels.title)} — ${escapeHtml(gathering.title)}</title>
   <style>
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
     body {
       margin: 0;
       font-family: "Figtree", "Segoe UI", system-ui, sans-serif;
@@ -264,34 +265,162 @@ export function buildEventReportHtml(
       background: #f3f7f5;
       line-height: 1.45;
     }
-    .wrap { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.1rem 3rem; }
-    h1 { font-family: "Bricolage Grotesque", Georgia, serif; font-size: 1.8rem; margin: 0 0 0.35rem; }
-    h2 { font-family: "Bricolage Grotesque", Georgia, serif; font-size: 1.25rem; margin: 1.6rem 0 0.65rem; }
-    .meta { color: #5d726c; margin: 0 0 0.35rem; }
-    .hint { color: #5d726c; font-size: 0.9rem; margin: 0 0 1.25rem; }
-    .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.6rem; margin: 1rem 0 1.4rem; }
-    .card { background: #fff; border: 1px solid rgba(6,40,35,0.1); border-radius: 12px; padding: 0.85rem 1rem; }
-    .card span { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #5d726c; font-weight: 700; }
-    .card strong { font-size: 1.25rem; }
-    table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; }
-    th, td { text-align: left; padding: 0.7rem 0.75rem; border-bottom: 1px solid rgba(6,40,35,0.08); vertical-align: top; font-size: 0.92rem; }
-    th { background: #e4eeea; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #1a3d37; }
-    table.tally { max-width: 420px; }
-    table.tally td:last-child, table.tally th:last-child { text-align: right; width: 4.5rem; }
+    .wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.1rem 0.9rem calc(2.5rem + env(safe-area-inset-bottom, 0px));
+      padding-left: max(0.9rem, env(safe-area-inset-left, 0px));
+      padding-right: max(0.9rem, env(safe-area-inset-right, 0px));
+    }
+    h1 {
+      font-family: "Bricolage Grotesque", Georgia, serif;
+      font-size: clamp(1.45rem, 5.5vw, 1.85rem);
+      margin: 0 0 0.35rem;
+      line-height: 1.15;
+      word-break: break-word;
+    }
+    h2 {
+      font-family: "Bricolage Grotesque", Georgia, serif;
+      font-size: clamp(1.1rem, 4.2vw, 1.25rem);
+      margin: 1.45rem 0 0.65rem;
+    }
+    .meta { color: #5d726c; margin: 0 0 0.35rem; font-size: 0.92rem; word-break: break-word; }
+    .hint { color: #5d726c; font-size: 0.88rem; margin: 0 0 1.1rem; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.55rem;
+      margin: 0.9rem 0 1.1rem;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid rgba(6,40,35,0.1);
+      border-radius: 12px;
+      padding: 0.8rem 0.9rem;
+      min-width: 0;
+    }
+    .card span {
+      display: block;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #5d726c;
+      font-weight: 700;
+    }
+    .card strong {
+      font-size: clamp(1.05rem, 4vw, 1.25rem);
+      word-break: break-word;
+    }
+    .tally-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0.4rem;
+      max-width: 480px;
+    }
+    .tally-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 0.75rem;
+      padding: 0.7rem 0.85rem;
+      background: #fff;
+      border: 1px solid rgba(6,40,35,0.1);
+      border-radius: 12px;
+    }
+    .tally-list li span { min-width: 0; word-break: break-word; }
+    .tally-list li strong {
+      flex-shrink: 0;
+      min-width: 1.75rem;
+      text-align: right;
+      color: #004f46;
+    }
+    .people { display: grid; gap: 0.7rem; }
+    .person {
+      background: #fff;
+      border: 1px solid rgba(6,40,35,0.1);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .person-head {
+      display: flex;
+      gap: 0.7rem;
+      align-items: flex-start;
+      padding: 0.85rem 0.9rem;
+      background: #eaf3f0;
+      border-bottom: 1px solid rgba(6,40,35,0.08);
+    }
+    .person-num {
+      flex-shrink: 0;
+      width: 1.7rem;
+      height: 1.7rem;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #006b5f;
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 800;
+    }
+    .person-who { min-width: 0; }
+    .person-who strong {
+      display: block;
+      font-size: 1.02rem;
+      word-break: break-word;
+    }
+    .person-fields {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0;
+      margin: 0;
+    }
+    .person-fields > div {
+      display: grid;
+      grid-template-columns: minmax(5.5rem, 32%) 1fr;
+      gap: 0.55rem;
+      padding: 0.65rem 0.9rem;
+      border-bottom: 1px solid rgba(6,40,35,0.06);
+      align-items: start;
+    }
+    .person-fields > div:last-child { border-bottom: 0; }
+    .person-fields dt {
+      margin: 0;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #5d726c;
+      padding-top: 0.15rem;
+    }
+    .person-fields dd {
+      margin: 0;
+      font-size: 0.92rem;
+      word-break: break-word;
+    }
     .muted { color: #5d726c; font-size: 0.82rem; margin-top: 0.2rem; }
     .allergy { color: #8e2a21; font-weight: 600; }
     .empty { color: #5d726c; }
-    .section { margin-bottom: 0.5rem; }
-    .count { color: #5d726c; font-weight: 600; font-size: 0.95rem; }
-    @media (max-width: 820px) {
-      .cards { grid-template-columns: 1fr 1fr; }
-      th:nth-child(7), td:nth-child(7) { display: none; }
+    .section { margin-bottom: 0.35rem; }
+    .count { color: #5d726c; font-weight: 600; font-size: 0.92rem; }
+    @media (min-width: 640px) {
+      .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .wrap { padding: 1.5rem 1.15rem 3rem; }
+      .person-fields {
+        grid-template-columns: 1fr 1fr;
+      }
+      .person-fields > div {
+        border-right: 1px solid rgba(6,40,35,0.06);
+      }
+      .person-fields > div:nth-child(2n) { border-right: 0; }
+      .person-contact { grid-column: 1 / -1; border-right: 0 !important; }
     }
     @media print {
       body { background: #fff; }
       .hint { display: none; }
       .wrap { max-width: none; padding: 0; }
-      .card, table { break-inside: avoid; }
+      .card, .person, .tally-list li { break-inside: avoid; }
     }
   </style>
 </head>
@@ -319,7 +448,7 @@ export function buildEventReportHtml(
       <h2>${escapeHtml(labels.carteTally)}</h2>
       ${
         carteTally.length
-          ? carteTallyRows(carteTally, { dish: labels.dish, qty: labels.qty })
+          ? carteTallyRows(carteTally)
           : `<p class="empty">${escapeHtml(labels.noCartePicks)}</p>`
       }
     </section>`
@@ -328,12 +457,12 @@ export function buildEventReportHtml(
 
     <section class="section">
       <h2>${escapeHtml(labels.adults)} <span class="count">(${adults.length})</span></h2>
-      ${adults.length ? personRows(adults, tableLabels) : `<p class="empty">${escapeHtml(labels.noGuests)}</p>`}
+      ${adults.length ? personCards(adults, tableLabels) : `<p class="empty">${escapeHtml(labels.noGuests)}</p>`}
     </section>
 
     <section class="section">
       <h2>${escapeHtml(labels.children)} <span class="count">(${children.length})</span></h2>
-      ${children.length ? personRows(children, tableLabels) : `<p class="empty">${escapeHtml(labels.noGuests)}</p>`}
+      ${children.length ? personCards(children, tableLabels) : `<p class="empty">${escapeHtml(labels.noGuests)}</p>`}
     </section>
   </div>
 </body>
