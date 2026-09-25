@@ -387,6 +387,32 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     })
   }
 
+  const organizerCodeMatch = path.match(
+    /^\/api\/gatherings\/([^/]+)\/organizer-code$/,
+  )
+  if (organizerCodeMatch && method === 'PUT') {
+    const id = decodeURIComponent(organizerCodeMatch[1])
+    const gathering = await readGathering(env.DB, id)
+    if (!gathering) return error('Gathering not found', 404)
+    const denied = requireOrganizer(request, gathering)
+    if (denied) return denied
+    const body = (await request.json()) as { code?: string }
+    const nextCode = normalizeOrganizerCode(body.code || '')
+    if (nextCode.length < 6 || nextCode.length > 12) {
+      return error('Code must be 6–12 letters or numbers')
+    }
+    const clash = await findGatheringByOrganizerCode(env.DB, nextCode)
+    if (clash && clash.id !== id) {
+      return error('That code is already used by another event')
+    }
+    gathering.organizerCode = formatOrganizerCode(nextCode)
+    await writeGathering(env.DB, gathering, false)
+    return json({
+      gathering: toPublicGathering(gathering),
+      organizerCode: gathering.organizerCode,
+    })
+  }
+
   const menuCardMatch = path.match(/^\/api\/gatherings\/([^/]+)\/menu-card$/)
   if (menuCardMatch && method === 'PUT') {
     const id = decodeURIComponent(menuCardMatch[1])

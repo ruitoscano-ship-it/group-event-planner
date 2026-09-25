@@ -60,6 +60,7 @@ export function EventPage() {
     deleteMessage,
     setMenuCarte,
     unlockEvent,
+    updateOrganizerCode,
     hasOrganizerAccess,
   } = useGatherings()
   const gathering = getGathering(eventId)
@@ -72,6 +73,11 @@ export function EventPage() {
   const [unlockCode, setUnlockCode] = useState('')
   const [unlockBusy, setUnlockBusy] = useState(false)
   const [unlockError, setUnlockError] = useState<string | null>(null)
+  const [editingCode, setEditingCode] = useState(false)
+  const [codeDraft, setCodeDraft] = useState('')
+  const [codeBusy, setCodeBusy] = useState(false)
+  const [codeMsg, setCodeMsg] = useState<string | null>(null)
+  const [codeError, setCodeError] = useState(false)
   const justCreated = searchParams.get('created') === '1'
   const canManage = hasOrganizerAccess(eventId)
   const organizerCode = loadOrganizerCode(eventId)
@@ -286,6 +292,31 @@ export function EventPage() {
       window.setTimeout(() => setCodeCopied(false), 1800)
     } catch {
       setCodeCopied(false)
+    }
+  }
+
+  async function saveOrganizerCodeEdit(e: FormEvent) {
+    e.preventDefault()
+    if (!gathering || codeBusy) return
+    const next = formatOrganizerCode(codeDraft)
+    const raw = next.replace(/[^a-zA-Z0-9]/g, '')
+    if (raw.length < 6 || raw.length > 12) {
+      setCodeError(true)
+      setCodeMsg(t('organizerCodeInvalid'))
+      return
+    }
+    setCodeBusy(true)
+    setCodeError(false)
+    setCodeMsg(null)
+    try {
+      await updateOrganizerCode(gathering.id, next)
+      setEditingCode(false)
+      setCodeMsg(t('organizerCodeUpdated'))
+    } catch (err) {
+      setCodeError(true)
+      setCodeMsg(err instanceof Error ? err.message : t('organizerCodeUpdateFailed'))
+    } finally {
+      setCodeBusy(false)
     }
   }
 
@@ -764,26 +795,83 @@ export function EventPage() {
           <p className="sub">
             {justCreated ? t('organizerCodeNewSub') : t('organizerCodeSub')}
           </p>
-          <div className="share-box" style={{ margin: '0.75rem 0 0' }}>
-            <strong>{t('organizerCode')}</strong>
-            <code>{organizerCode}</code>
-            <button
-              className="btn btn-sm btn-accent"
-              type="button"
-              onClick={() => void copyOrganizerCode()}
+          {codeMsg && (
+            <div
+              className={`feedback-banner ${codeError ? 'error' : ''}`}
+              role="status"
+              style={{ marginTop: '0.75rem' }}
             >
-              {codeCopied ? t('copied') : t('copyCode')}
-            </button>
-            {justCreated && (
+              {codeMsg}
+            </div>
+          )}
+          {editingCode ? (
+            <form onSubmit={(e) => void saveOrganizerCodeEdit(e)}>
+              <label className="full" style={{ marginTop: '0.75rem' }}>
+                {t('organizerCode')}
+                <input
+                  value={codeDraft}
+                  onChange={(e) => setCodeDraft(formatOrganizerCode(e.target.value))}
+                  placeholder={t('organizerCodePlaceholder')}
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  autoFocus
+                />
+              </label>
+              <p className="sub">{t('organizerCodeEditHint')}</p>
+              <div className="form-actions">
+                <button
+                  className="btn btn-ghost"
+                  type="button"
+                  disabled={codeBusy}
+                  onClick={() => {
+                    setEditingCode(false)
+                    setCodeDraft(organizerCode)
+                    setCodeMsg(null)
+                    setCodeError(false)
+                  }}
+                >
+                  {t('cancel')}
+                </button>
+                <button className="btn btn-accent" type="submit" disabled={codeBusy}>
+                  {codeBusy ? t('saving') : t('saveOrganizerCode')}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="share-box" style={{ margin: '0.75rem 0 0' }}>
+              <strong>{t('organizerCode')}</strong>
+              <code>{organizerCode}</code>
+              <button
+                className="btn btn-sm btn-accent"
+                type="button"
+                onClick={() => void copyOrganizerCode()}
+              >
+                {codeCopied ? t('copied') : t('copyCode')}
+              </button>
               <button
                 className="btn btn-sm btn-ghost"
                 type="button"
-                onClick={() => setSearchParams({}, { replace: true })}
+                onClick={() => {
+                  setEditingCode(true)
+                  setCodeDraft(organizerCode)
+                  setCodeMsg(null)
+                  setCodeError(false)
+                }}
               >
-                {t('codeSavedDismiss')}
+                {t('editOrganizerCode')}
               </button>
-            )}
-          </div>
+              {justCreated && (
+                <button
+                  className="btn btn-sm btn-ghost"
+                  type="button"
+                  onClick={() => setSearchParams({}, { replace: true })}
+                >
+                  {t('codeSavedDismiss')}
+                </button>
+              )}
+            </div>
+          )}
         </section>
       )}
       {reportMsg && (

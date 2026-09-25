@@ -76,6 +76,16 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ code }) },
     )
   },
+  updateOrganizerCode(gatheringId: string, code: string) {
+    return request<GatheringAccess>(
+      `/api/gatherings/${encodeURIComponent(gatheringId)}/organizer-code`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ code }),
+        organizerCode: withCode(gatheringId),
+      },
+    )
+  },
   updateGathering(gathering: Gathering, organizerCode?: string | null) {
     return request<Gathering>(`/api/gatherings/${encodeURIComponent(gathering.id)}`, {
       method: 'PUT',

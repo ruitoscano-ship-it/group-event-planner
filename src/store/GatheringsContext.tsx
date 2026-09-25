@@ -50,6 +50,10 @@ type Store = {
     gatheringId: string,
     code: string,
   ) => Promise<{ gathering: Gathering; organizerCode: string }>
+  updateOrganizerCode: (
+    gatheringId: string,
+    code: string,
+  ) => Promise<{ gathering: Gathering; organizerCode: string }>
   hasOrganizerAccess: (gatheringId: string) => boolean
   updateGathering: (id: string, patch: Partial<Gathering>) => Promise<void>
   deleteGathering: (id: string) => Promise<void>
@@ -157,6 +161,17 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
     return result
   }, [])
 
+  const updateOrganizerCode = useCallback(
+    async (gatheringId: string, code: string) => {
+      const result = await api.updateOrganizerCode(gatheringId, code)
+      saveOrganizerCode(result.gathering.id, result.organizerCode)
+      setAccessTick((n) => n + 1)
+      setGatherings((prev) => upsert(prev, result.gathering))
+      return result
+    },
+    [],
+  )
+
   const hasOrganizerAccess = useCallback(
     (gatheringId: string) => {
       void accessTick
@@ -258,6 +273,7 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       createGathering,
       unlockWithCode,
       unlockEvent,
+      updateOrganizerCode,
       hasOrganizerAccess,
       updateGathering,
       deleteGathering,
@@ -282,6 +298,7 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       createGathering,
       unlockWithCode,
       unlockEvent,
+      updateOrganizerCode,
       hasOrganizerAccess,
       updateGathering,
       deleteGathering,
