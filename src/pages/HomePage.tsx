@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { CreateEventChat } from '../components/CreateEventChat'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { useI18n } from '../i18n/I18nContext'
+import { shouldUseAssistedMode } from '../lib/assistedMode'
 import { formatOrganizerCode } from '../lib/organizerAccess'
 import { useGatherings } from '../store/GatheringsContext'
 import type { GatheringInput } from '../types'
@@ -14,12 +15,15 @@ export function HomePage() {
   const { t } = useI18n()
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>('choose')
+  const [assisted, setAssisted] = useState(false)
   const [accessCode, setAccessCode] = useState('')
   const [accessBusy, setAccessBusy] = useState(false)
   const [accessError, setAccessError] = useState<string | null>(null)
+  const firstEvent = useMemo(() => shouldUseAssistedMode(), [])
 
   function goHome() {
     setMode('choose')
+    setAssisted(false)
     setAccessError(null)
     setAccessCode('')
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -27,7 +31,8 @@ export function HomePage() {
 
   async function handleCreate(input: GatheringInput) {
     const created = await createGathering(input)
-    navigate(`/events/${created.gathering.id}?created=1`, { viewTransition: true })
+    const q = assisted ? 'created=1&assisted=1' : 'created=1'
+    navigate(`/events/${created.gathering.id}?${q}`, { viewTransition: true })
   }
 
   async function onAccess(e: FormEvent) {
@@ -74,10 +79,17 @@ export function HomePage() {
               <button
                 className="btn btn-accent landing-action"
                 type="button"
-                onClick={() => setMode('create')}
+                onClick={() => {
+                  const guide = shouldUseAssistedMode()
+                  setAssisted(guide)
+                  setMode('create')
+                }}
               >
-                {t('createEvent')}
+                {firstEvent ? t('createFirstEvent') : t('createEvent')}
               </button>
+              {firstEvent && (
+                <p className="assisted-landing-hint">{t('assistedLandingHint')}</p>
+              )}
               <button
                 className="btn btn-ghost landing-action"
                 type="button"
@@ -92,7 +104,11 @@ export function HomePage() {
           )}
 
           {mode === 'create' && (
-            <CreateEventChat onCancel={goHome} onCreate={handleCreate} />
+            <CreateEventChat
+              assisted={assisted}
+              onCancel={goHome}
+              onCreate={handleCreate}
+            />
           )}
 
           {mode === 'code' && (

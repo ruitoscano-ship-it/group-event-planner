@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AgeGroupPicker } from '../components/AgeGroupPicker'
 import { EventCarteEditor } from '../components/EventCarteEditor'
+import { FirstEventCoach, type CoachStep } from '../components/FirstEventCoach'
 import { GuestEditor } from '../components/GuestEditor'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { MenuOrderField } from '../components/MenuOrderField'
@@ -35,6 +36,7 @@ import {
   menuItemSavedKeys,
   pickFeedback,
 } from '../lib/feedback'
+import { markAssistedComplete } from '../lib/assistedMode'
 import { useGatherings } from '../store/GatheringsContext'
 import type { AgeGroup, GroupMember } from '../types'
 
@@ -80,6 +82,12 @@ export function EventPage() {
   const [codeMsg, setCodeMsg] = useState<string | null>(null)
   const [codeError, setCodeError] = useState(false)
   const justCreated = searchParams.get('created') === '1'
+  const assistedTour = searchParams.get('assisted') === '1'
+  const [coachStep, setCoachStep] = useState<CoachStep | null>(
+    assistedTour ? 'code' : null,
+  )
+  const shareBoxRef = useRef<HTMLDivElement | null>(null)
+  const codePanelRef = useRef<HTMLElement | null>(null)
   const canManage = hasOrganizerAccess(eventId)
   const organizerCode = loadOrganizerCode(eventId)
   const [cardLink, setCardLink] = useState('')
@@ -782,7 +790,10 @@ export function EventPage() {
         </div>
       </div>
 
-      <div className="share-box">
+      <div
+        className={`share-box ${coachStep === 'share' || coachStep === 'code' ? 'coach-target' : ''}`}
+        ref={shareBoxRef}
+      >
         <strong>{t('selfServiceLink')}</strong>
         <code>{rsvpUrl}</code>
         <button className="btn btn-sm btn-accent" type="button" onClick={() => void copyLink()}>
@@ -795,7 +806,10 @@ export function EventPage() {
 
       {organizerCode && (
         <section
-          className={`panel organizer-code-panel ${justCreated ? 'is-new' : ''}`}
+          ref={codePanelRef}
+          className={`panel organizer-code-panel ${justCreated ? 'is-new' : ''} ${
+            coachStep === 'code' ? 'coach-target' : ''
+          }`}
           style={{ marginBottom: '1rem' }}
         >
           <h2>{t('organizerCodeTitle')}</h2>
@@ -887,7 +901,7 @@ export function EventPage() {
         </p>
       )}
 
-      <div className="tabs">
+      <div className={`tabs ${coachStep === 'menu' ? 'coach-target' : ''}`}>
         {([
           ['menu', 'tabMenu'],
           ['guests', 'tabGuests'],
@@ -1561,6 +1575,37 @@ export function EventPage() {
             </div>
           )}
         </section>
+      )}
+
+      {coachStep && canManage && (
+        <FirstEventCoach
+          step={coachStep}
+          onStep={(next) => {
+            setCoachStep(next)
+            if (next === 'code') {
+              codePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }
+            if (next === 'menu') {
+              setTab('menu')
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }
+            if (next === 'share') {
+              shareBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }
+          }}
+          onGoMenu={() => {
+            setTab('menu')
+            window.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+          onGoShare={() => {
+            shareBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }}
+          onFinish={() => {
+            markAssistedComplete()
+            setCoachStep(null)
+            setSearchParams({}, { replace: true })
+          }}
+        />
       )}
     </>
   )

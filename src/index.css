@@ -2919,3 +2919,150 @@ body[data-menu-sheet-open='1'] {
     grid-template-columns: 1fr;
   }
 }
+
+.assisted-landing-hint {
+  margin: -0.35rem 0 0.35rem;
+  max-width: 22rem;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.assisted-badge,
+.assisted-badge-sm {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(0, 79, 70, 0.1);
+  color: var(--green-deep);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.assisted-badge-sm {
+  padding: 0.22rem 0.55rem;
+}
+
+.create-chat-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.assisted-welcome h2 {
+  margin: 0.55rem 0 0.4rem;
+  font-size: 1.35rem;
+}
+
+.assisted-roadmap {
+  margin: 0.85rem 0 1.15rem;
+  padding-left: 1.2rem;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.assisted-roadmap li {
+  margin-bottom: 0.35rem;
+}
+
+.assisted-step-label {
+  margin: 0 0 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.create-chat-tip {
+  margin: -0.15rem 0 0.85rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.create-chat.is-assisted {
+  max-height: min(72vh, 640px);
+}
+
+.first-event-coach {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 40;
+  width: min(22rem, calc(100vw - 2rem));
+  padding: 1rem 1.1rem 0.95rem;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 40px rgba(6, 40, 35, 0.18);
+  animation: rise 0.35s ease both;
+}
+
+.first-event-coach h2 {
+  margin: 0.45rem 0 0.35rem;
+  font-size: 1.1rem;
+}
+
+.first-event-coach p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.first-event-coach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+  margin-top: 0.9rem;
+}
+
+.first-event-coach-dots {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.85rem;
+}
+
+.first-event-coach-dots span {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: #d5e4df;
+}
+
+.first-event-coach-dots span.on {
+  background: var(--green-deep);
+  width: 1.1rem;
+}
+
+.coach-target {
+  outline: 2px solid rgba(62, 207, 154, 0.85);
+  outline-offset: 4px;
+  border-radius: 16px;
+  animation: coach-pulse 1.6s ease infinite;
+}
+
+@keyframes coach-pulse {
+  0%,
+  100% {
+    outline-color: rgba(62, 207, 154, 0.35);
+  }
+  50% {
+    outline-color: rgba(62, 207, 154, 0.95);
+  }
+}
+
+@media (max-width: 720px) {
+  .first-event-coach {
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    width: auto;
+  }
+}
