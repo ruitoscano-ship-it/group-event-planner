@@ -520,9 +520,6 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     }
     if (!body?.name?.trim()) return error('Guest name is required')
     const email = normalizeEmail(body.email || '')
-    if (!asOrganizer && !email) {
-      return error('Email is required for RSVP')
-    }
 
     const isGroup = Boolean(body.isGroup)
     const members = isGroup && Array.isArray(body.members)

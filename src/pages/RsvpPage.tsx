@@ -13,7 +13,6 @@ import { MenuPicker } from '../components/MenuPicker'
 import { MenuSheet } from '../components/MenuSheet'
 import { useI18n } from '../i18n/I18nContext'
 import {
-  attendeeTotal,
   createMemberDraft,
   formatDate,
   formatMoney,
@@ -169,15 +168,18 @@ export function RsvpPage() {
 
   const whoReady =
     name.trim().length > 0 &&
-    email.trim().length > 0 &&
     (!forSomeoneElse || registeredBy.trim().length > 0)
+
+  const hasMenuLoaded = Boolean(
+    gathering &&
+      (gathering.menu.length > 0 ||
+        gathering.menuCardUrl ||
+        (gathering.carteApproved && (gathering.carteItems || []).length > 0)),
+  )
 
   const menuReady = useMemo(() => {
     if (!gathering) return false
-    const hasFixed = gathering.menu.length > 0
-    const hasCarte =
-      gathering.carteApproved && (gathering.carteItems || []).length > 0
-    const needsPick = hasFixed || hasCarte || Boolean(gathering.menuCardUrl)
+    const needsPick = hasMenuLoaded
     if (asGroup) {
       if (members.length === 0) return false
       return members.every((m) => {
@@ -196,7 +198,15 @@ export function RsvpPage() {
       carteItemIds.length > 0 ||
       Boolean(menuRequest.trim())
     )
-  }, [gathering, asGroup, members, menuItemIds, carteItemIds, menuRequest])
+  }, [
+    gathering,
+    hasMenuLoaded,
+    asGroup,
+    members,
+    menuItemIds,
+    carteItemIds,
+    menuRequest,
+  ])
 
   function goTo(next: Step) {
     setSubmitError(null)
@@ -294,11 +304,6 @@ export function RsvpPage() {
       goTo('who')
       return
     }
-    if (!email.trim()) {
-      setSubmitError(t('rsvpNeedEmail'))
-      goTo('who')
-      return
-    }
     if (!menuReady) {
       setSubmitError(t('rsvpNeedMenu'))
       goTo('menu')
@@ -337,15 +342,17 @@ export function RsvpPage() {
         ? `${name.trim()} · ${members.length} ${
             members.length === 1 ? t('personLabel') : t('peopleLabel')
           }`
-        : `${name.trim()} · ${
-            ageGroup === 'child' ? t('ageChild') : t('ageAdult')
-          } · ${personOrderLabel(
-            menuItemIds,
-            carteItemIds,
-            menuRequest,
-            gathering,
-            t('noSelection'),
-          )}`
+        : `${name.trim()}${
+            hasMenuLoaded
+              ? ` · ${personOrderLabel(
+                  menuItemIds,
+                  carteItemIds,
+                  menuRequest,
+                  gathering,
+                  t('noSelection'),
+                )}`
+              : ` · ${t('pickAlaCarteOnVenue')}`
+          }`
 
       saveGuestPrefs({
         name: forSomeoneElse ? registeredBy.trim() : name.trim(),
@@ -637,10 +644,9 @@ export function RsvpPage() {
                 </label>
               )}
               <label>
-                {t('emailRequired')}
+                {t('emailOptional')}
                 <input
                   type="email"
-                  required
                   autoComplete="email"
                   inputMode="email"
                   value={email}
@@ -691,8 +697,70 @@ export function RsvpPage() {
         {step === 'menu' && (
           <div className="rsvp-step-body">
             <h2>{t('rsvpStepMenuTitle')}</h2>
-            <p className="sub">{t('rsvpStepMenuSub')}</p>
+            <p className="sub">
+              {hasMenuLoaded ? t('rsvpStepMenuSub') : t('pickAlaCarteOnVenueSub')}
+            </p>
 
+            {!hasMenuLoaded ? (
+              <div className="rsvp-venue-pick" role="status">
+                <p className="rsvp-venue-pick-title">{t('pickAlaCarteOnVenue')}</p>
+                <p className="sub">{t('pickAlaCarteOnVenueSub')}</p>
+                {asGroup && (
+                  <>
+                    <div className="member-list" style={{ marginTop: '1rem' }}>
+                      {members.map((member, index) => (
+                        <div key={member.id} className="member-card">
+                          <div className="member-card-head">
+                            <h4>{t('memberLabel', { n: index + 1 })}</h4>
+                            {members.length > 1 && (
+                              <button
+                                type="button"
+                                className="btn btn-danger btn-sm"
+                                onClick={() =>
+                                  setMembers((prev) =>
+                                    prev.filter((m) => m.id !== member.id),
+                                  )
+                                }
+                              >
+                                {t('removeMember')}
+                              </button>
+                            )}
+                          </div>
+                          <label>
+                            {t('memberName')}
+                            <input
+                              required
+                              value={member.name}
+                              onChange={(e) =>
+                                updateMember(member.id, { name: e.target.value })
+                              }
+                              placeholder={t('memberNamePlaceholder')}
+                              autoComplete="name"
+                            />
+                          </label>
+                          <AgeGroupPicker
+                            value={member.ageGroup || 'adult'}
+                            onChange={(value) =>
+                              updateMember(member.id, { ageGroup: value })
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() =>
+                        setMembers((prev) => [...prev, createMemberDraft()])
+                      }
+                    >
+                      {t('addMember')}
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <>
             {(gathering.menuCardUrl ||
               gathering.menu.length > 0 ||
               (gathering.carteApproved && (gathering.carteItems || []).length > 0)) && (
@@ -769,8 +837,8 @@ export function RsvpPage() {
                         </div>
                       )}
                       {(gathering.menuCardUrl ||
-                        gathering.carteApproved ||
-                        gathering.menu.length === 0) && (
+                        (gathering.carteApproved &&
+                          (gathering.carteItems || []).length > 0)) && (
                         <MenuOrderField
                           carteItems={gathering.carteItems || []}
                           carteApproved={Boolean(gathering.carteApproved)}
@@ -815,8 +883,8 @@ export function RsvpPage() {
                   </>
                 )}
                 {(gathering.menuCardUrl ||
-                  gathering.carteApproved ||
-                  gathering.menu.length === 0) && (
+                  (gathering.carteApproved &&
+                    (gathering.carteItems || []).length > 0)) && (
                   <div style={{ marginTop: '0.85rem' }}>
                     <MenuOrderField
                       carteItems={gathering.carteItems || []}
@@ -829,11 +897,8 @@ export function RsvpPage() {
                     />
                   </div>
                 )}
-                {gathering.menu.length === 0 &&
-                  !gathering.menuCardUrl &&
-                  !(gathering.carteApproved && (gathering.carteItems || []).length) && (
-                    <div className="empty">{t('organizerNoMenu')}</div>
-                  )}
+              </>
+            )}
               </>
             )}
           </div>
@@ -867,15 +932,17 @@ export function RsvpPage() {
                   {members.map((m) => (
                     <li key={m.id}>
                       <strong>{m.name || '—'}</strong>
-                      {' · '}
-                      {m.ageGroup === 'child' ? t('ageChild') : t('ageAdult')}
-                      {' · '}
-                      {personOrderLabel(
-                        m.menuItemIds,
-                        m.carteItemIds || [],
-                        m.menuRequest || '',
-                        gathering,
-                        t('noSelection'),
+                      {hasMenuLoaded && (
+                        <>
+                          {' · '}
+                          {personOrderLabel(
+                            m.menuItemIds,
+                            m.carteItemIds || [],
+                            m.menuRequest || '',
+                            gathering,
+                            t('pickAlaCarteOnVenue'),
+                          )}
+                        </>
                       )}
                     </li>
                   ))}
@@ -884,13 +951,15 @@ export function RsvpPage() {
                 <div className="rsvp-review-row">
                   <span>{t('pickFromMenu')}</span>
                   <strong>
-                    {personOrderLabel(
-                      menuItemIds,
-                      carteItemIds,
-                      menuRequest,
-                      gathering,
-                      t('noSelection'),
-                    )}
+                    {hasMenuLoaded
+                      ? personOrderLabel(
+                          menuItemIds,
+                          carteItemIds,
+                          menuRequest,
+                          gathering,
+                          t('noSelection'),
+                        )
+                      : t('pickAlaCarteOnVenue')}
                   </strong>
                 </div>
               )}
@@ -901,10 +970,19 @@ export function RsvpPage() {
                 </div>
               )}
               <div className="rsvp-review-row highlight">
-                <span>{hasAlaCartePick ? t('estimatedVariable') : t('estimated')}</span>
-                <strong className="price">
-                  {formatMoney(estimated, gathering.currency, localeTag)}
-                  {hasAlaCartePick ? '+' : ''}
+                <span>
+                  {hasMenuLoaded
+                    ? hasAlaCartePick
+                      ? t('estimatedVariable')
+                      : t('estimated')
+                    : t('pickFromMenu')}
+                </span>
+                <strong className={hasMenuLoaded ? 'price' : undefined}>
+                  {hasMenuLoaded
+                    ? `${formatMoney(estimated, gathering.currency, localeTag)}${
+                        hasAlaCartePick ? '+' : ''
+                      }`
+                    : t('pickAlaCarteOnVenue')}
                 </strong>
               </div>
             </div>
@@ -960,20 +1038,22 @@ export function RsvpPage() {
           </div>
           {(step === 'menu' || step === 'review') && (
             <p className="rsvp-sticky-estimate">
-              {t('estimated')}{' '}
-              <strong className="price">
-                {formatMoney(estimated, gathering.currency, localeTag)}
-                {hasAlaCartePick ? '+' : ''}
-              </strong>
-              {step === 'menu' &&
-                (gathering.menuCardUrl ||
-                  gathering.menu.length > 0 ||
-                  (gathering.carteApproved &&
-                    (gathering.carteItems || []).length > 0)) && (
+              {hasMenuLoaded ? (
                 <>
-                  {' · '}
-                  <MenuSheet gathering={gathering} compact />
+                  {t('estimated')}{' '}
+                  <strong className="price">
+                    {formatMoney(estimated, gathering.currency, localeTag)}
+                    {hasAlaCartePick ? '+' : ''}
+                  </strong>
+                  {step === 'menu' && (
+                    <>
+                      {' · '}
+                      <MenuSheet gathering={gathering} compact />
+                    </>
+                  )}
                 </>
+              ) : (
+                <strong>{t('pickAlaCarteOnVenue')}</strong>
               )}
             </p>
           )}
@@ -988,38 +1068,19 @@ export function RsvpPage() {
         {gathering.attendees.length === 0 ? (
           <div className="empty">{t('beFirst')}</div>
         ) : (
-          <div className="guest-list">
+          <ul className="rsvp-coming-names">
             {gathering.attendees.map((a) => (
-              <div key={a.id} className="guest-row">
-                <h4>{a.name}</h4>
-                {a.isGroup && a.members?.length ? (
-                  <ul className="member-picks">
-                    {a.members.map((m) => (
-                      <li key={m.id}>
-                        <strong>{m.name}</strong>
-                        {' · '}
-                        {m.ageGroup === 'child' ? t('ageChild') : t('ageAdult')}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>
-                    {!a.isGroup &&
-                      (a.ageGroup === 'child' ? t('ageChild') : t('ageAdult'))}
-                  </p>
-                )}
-                {a.isGroup && (
-                  <p className="sub" style={{ marginTop: '0.35rem' }}>
-                    {formatMoney(
-                      attendeeTotal(a, gathering.menu),
-                      gathering.currency,
-                      localeTag,
-                    )}
-                  </p>
-                )}
-              </div>
+              <li key={a.id}>
+                <strong>{a.name}</strong>
+                {a.isGroup && a.members?.length
+                  ? ` · ${a.members
+                      .map((m) => m.name)
+                      .filter(Boolean)
+                      .join(', ')}`
+                  : ''}
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </details>
 

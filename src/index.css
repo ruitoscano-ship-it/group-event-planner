@@ -1926,6 +1926,38 @@ textarea {
   color: rgba(255, 255, 255, 0.88);
 }
 
+.rsvp-coming-names {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.rsvp-coming-names li {
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  border-radius: 12px;
+  background: var(--green-soft);
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.rsvp-venue-pick {
+  margin-top: 0.35rem;
+  padding: 1rem 1.05rem;
+  border-radius: 14px;
+  border: 1px dashed rgba(0, 79, 70, 0.28);
+  background: rgba(183, 228, 216, 0.28);
+}
+
+.rsvp-venue-pick-title {
+  margin: 0 0 0.35rem;
+  font-weight: 700;
+  color: var(--green-deep);
+  font-size: 1.05rem;
+}
+
 .rsvp-flow {
   animation: rise 0.35s ease both;
 }
