@@ -30,6 +30,7 @@ import type {
 
 type AddAttendeeInput = Omit<Attendee, 'id' | 'createdAt' | 'amountPaid'> & {
   amountPaid?: number
+  guestKey?: string
 }
 
 type Store = {
@@ -68,7 +69,8 @@ type Store = {
   addAttendee: (
     gatheringId: string,
     attendee: AddAttendeeInput,
-  ) => Promise<{ attendeeId: string; updated: boolean }>
+    options?: { asGuest?: boolean },
+  ) => Promise<{ attendeeId: string; updated: boolean; guestKey?: string }>
   updateAttendee: (
     gatheringId: string,
     attendeeId: string,
@@ -109,7 +111,19 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       const list = await api.listGatherings(ids)
       const foundIds = new Set(list.map((g) => g.id))
       saveKnownIds(ids.filter((id) => foundIds.has(id)))
-      setGatherings(list)
+      // Re-fetch with organizer codes so manage views keep full guest/inbox data
+      const hydrated = await Promise.all(
+        list.map(async (g) => {
+          const code = loadOrganizerCode(g.id)
+          if (!code) return g
+          try {
+            return await api.getGathering(g.id, code)
+          } catch {
+            return g
+          }
+        }),
+      )
+      setGatherings(hydrated)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load gatherings')
     } finally {
@@ -221,11 +235,22 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
     setGatherings((prev) => upsert(prev, next))
   }, [])
 
-  const addAttendee = useCallback(async (gatheringId: string, attendee: AddAttendeeInput) => {
-    const result = await api.addAttendee(gatheringId, attendee)
-    setGatherings((prev) => upsert(prev, result.gathering))
-    return { attendeeId: result.attendeeId, updated: result.updated }
-  }, [])
+  const addAttendee = useCallback(
+    async (
+      gatheringId: string,
+      attendee: AddAttendeeInput,
+      options?: { asGuest?: boolean },
+    ) => {
+      const result = await api.addAttendee(gatheringId, attendee, options)
+      setGatherings((prev) => upsert(prev, result.gathering))
+      return {
+        attendeeId: result.attendeeId,
+        updated: result.updated,
+        guestKey: result.guestKey,
+      }
+    },
+    [],
+  )
 
   const updateAttendee = useCallback(
     async (gatheringId: string, attendeeId: string, patch: Partial<Attendee>) => {
@@ -241,8 +266,7 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const sendMessage = useCallback(async (gatheringId: string, message: MessageInput) => {
-    const next = await api.sendMessage(gatheringId, message)
-    setGatherings((prev) => upsert(prev, next))
+    await api.sendMessage(gatheringId, message)
   }, [])
 
   const markMessageRead = useCallback(

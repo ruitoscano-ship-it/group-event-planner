@@ -27,6 +27,7 @@ import {
   loadOrganizerCode,
 } from '../lib/organizerAccess'
 import { buildEventReportHtml, openEventReport } from '../lib/report'
+import { safeMediaUrl } from '../lib/safeUrl'
 import {
   detailsSavedKeys,
   guestAddedKeys,
@@ -145,7 +146,8 @@ export function EventPage() {
 
   useEffect(() => {
     if (gathering?.menuCardUrl && !gathering.menuCardUrl.startsWith('data:')) {
-      setCardLink(gathering.menuCardUrl)
+      const safe = safeMediaUrl(gathering.menuCardUrl)
+      if (safe) setCardLink(safe)
     }
   }, [gathering?.menuCardUrl])
 
@@ -957,15 +959,15 @@ export function EventPage() {
                 {cardMsg}
               </div>
             )}
-            {gathering.menuCardUrl && (
+            {safeMediaUrl(gathering.menuCardUrl) && (
               <div className="menu-card-preview">
-                <img src={gathering.menuCardUrl} alt={t('menuCard')} />
-                {!gathering.menuCardUrl.startsWith('data:') && (
+                <img src={safeMediaUrl(gathering.menuCardUrl)} alt={t('menuCard')} />
+                {!safeMediaUrl(gathering.menuCardUrl).startsWith('data:') && (
                   <a
                     className="btn btn-ghost btn-sm"
-                    href={gathering.menuCardUrl}
+                    href={safeMediaUrl(gathering.menuCardUrl)}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                   >
                     {t('menuCardOpen')}
                   </a>

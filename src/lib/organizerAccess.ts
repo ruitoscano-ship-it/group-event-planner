@@ -2,7 +2,10 @@ const ACCESS_KEY = 'round-organizer-access-v1'
 const RSVP_KEY = 'round-my-rsvp-v1'
 
 type AccessMap = Record<string, string>
-type RsvpMap = Record<string, { attendeeId: string; email: string }>
+type RsvpMap = Record<
+  string,
+  { attendeeId: string; email: string; guestKey?: string }
+>
 
 function loadAccessMap(): AccessMap {
   try {
@@ -61,17 +64,23 @@ function loadRsvpMap(): RsvpMap {
 
 export function loadMyRsvp(
   gatheringId: string,
-): { attendeeId: string; email: string } | null {
+): { attendeeId: string; email: string; guestKey?: string } | null {
   const row = loadRsvpMap()[gatheringId]
   if (!row?.attendeeId) return null
   return row
 }
 
-export function saveMyRsvp(gatheringId: string, attendeeId: string, email: string) {
+export function saveMyRsvp(
+  gatheringId: string,
+  attendeeId: string,
+  email: string,
+  guestKey?: string,
+) {
   const map = loadRsvpMap()
   map[gatheringId] = {
     attendeeId,
     email: email.trim().toLowerCase(),
+    guestKey: guestKey || map[gatheringId]?.guestKey || '',
   }
   localStorage.setItem(RSVP_KEY, JSON.stringify(map))
 }

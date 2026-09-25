@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useI18n } from '../i18n/I18nContext'
 import { formatMoney } from '../lib/money'
+import { safeMediaUrl } from '../lib/safeUrl'
 import type { Gathering } from '../types'
 
 type Props = {
@@ -33,7 +34,8 @@ export function MenuSheet({ gathering, compact = false }: Props) {
   const [open, setOpen] = useState(false)
   const [zoom, setZoom] = useState(1)
   const sheetRef = useRef<HTMLDivElement | null>(null)
-  const hasCard = Boolean(gathering.menuCardUrl)
+  const hasCard = Boolean(safeMediaUrl(gathering.menuCardUrl))
+  const cardUrl = safeMediaUrl(gathering.menuCardUrl)
   const hasItems = gathering.menu.length > 0
   const hasCarte =
     gathering.carteApproved && (gathering.carteItems || []).length > 0
@@ -113,7 +115,7 @@ export function MenuSheet({ gathering, compact = false }: Props) {
 
                   <div className="menu-zoom-viewport">
                     <img
-                      src={gathering.menuCardUrl}
+                      src={cardUrl}
                       alt={t('menuCard')}
                       className="menu-zoom-image"
                       style={{ transform: `scale(${zoom})` }}
@@ -121,13 +123,13 @@ export function MenuSheet({ gathering, compact = false }: Props) {
                     />
                   </div>
 
-                  {!gathering.menuCardUrl.startsWith('data:') && (
+                  {!cardUrl.startsWith('data:') && (
                     <div className="menu-ocr-actions">
                       <a
                         className="btn btn-ghost btn-sm"
-                        href={gathering.menuCardUrl}
+                        href={cardUrl}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                       >
                         {t('menuCardOpen')}
                       </a>

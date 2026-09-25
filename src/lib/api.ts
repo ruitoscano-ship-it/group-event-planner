@@ -47,6 +47,7 @@ export type AddAttendeeResult = {
   gathering: Gathering
   attendeeId: string
   updated: boolean
+  guestKey?: string
 }
 
 export const api = {
@@ -55,8 +56,10 @@ export const api = {
     const q = encodeURIComponent(ids.join(','))
     return request<Gathering[]>(`/api/gatherings?ids=${q}`)
   },
-  getGathering(id: string) {
-    return request<Gathering>(`/api/gatherings/${encodeURIComponent(id)}`)
+  getGathering(id: string, organizerCode?: string | null) {
+    return request<Gathering>(`/api/gatherings/${encodeURIComponent(id)}`, {
+      organizerCode: organizerCode === undefined ? withCode(id) : organizerCode,
+    })
   },
   createGathering(input: GatheringInput) {
     return request<GatheringAccess>('/api/gatherings', {
@@ -159,15 +162,19 @@ export const api = {
     gatheringId: string,
     attendee: Omit<Attendee, 'id' | 'createdAt' | 'amountPaid'> & {
       amountPaid?: number
+      guestKey?: string
     },
-    organizerCode?: string | null,
+    options?: { asGuest?: boolean; organizerCode?: string | null },
   ) {
+    const organizerCode = options?.asGuest
+      ? null
+      : withCode(gatheringId, options?.organizerCode)
     return request<AddAttendeeResult>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/attendees`,
       {
         method: 'POST',
         body: JSON.stringify(attendee),
-        organizerCode: withCode(gatheringId, organizerCode),
+        organizerCode,
       },
     )
   },
@@ -200,7 +207,7 @@ export const api = {
     )
   },
   sendMessage(gatheringId: string, message: MessageInput) {
-    return request<Gathering>(
+    return request<{ ok: boolean }>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/messages`,
       { method: 'POST', body: JSON.stringify(message) },
     )

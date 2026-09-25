@@ -41,6 +41,8 @@ export type Attendee = {
   isGroup: boolean
   groupSize: number
   members: GroupMember[]
+  /** Secret proof to update this RSVP; never exposed on public GETs. */
+  guestKey?: string
 }
 
 export type InboxMessage = {

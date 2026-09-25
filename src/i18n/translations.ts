@@ -98,7 +98,7 @@ export const translations = {
       'Atualizámos a inscrição deste email. Cada email só tem um RSVP por evento.',
     rsvpUpdateMine: 'Atualizar o meu RSVP',
     rsvpUniqueHint:
-      'Contacto é opcional. Se indicar email, o mesmo email atualiza o RSVP neste evento.',
+      'Contacto é opcional. Se indicar email, pode atualizar o RSVP neste dispositivo.',
     title: 'Título',
     type: 'Tipo',
     currency: 'Moeda',
@@ -484,7 +484,7 @@ export const translations = {
       'We updated the registration for this email. Each email has one RSVP per event.',
     rsvpUpdateMine: 'Update my RSVP',
     rsvpUniqueHint:
-      'Contact is optional. If you leave an email, the same email updates your RSVP for this event.',
+      'Contact is optional. If you leave an email, you can update your RSVP from this device.',
     title: 'Title',
     type: 'Type',
     currency: 'Currency',

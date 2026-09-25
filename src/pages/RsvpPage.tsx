@@ -27,6 +27,7 @@ import {
   loadMyRsvp,
   saveMyRsvp,
 } from '../lib/organizerAccess'
+import { safeMediaUrl } from '../lib/safeUrl'
 import {
   clearRsvpDraft,
   loadGuestPrefs,
@@ -313,30 +314,36 @@ export function RsvpPage() {
     setSaving(true)
     setSubmitError(null)
     try {
-      const result = await addAttendee(gathering.id, {
-        name: name.trim(),
-        registeredBy: registrar,
-        email: email.trim(),
-        phone: phone.trim(),
-        menuItemIds: asGroup ? [] : menuItemIds,
-        carteItemIds: asGroup ? [] : carteItemIds,
-        allergies: asGroup ? '' : allergies.trim(),
-        notes: notes.trim(),
-        menuRequest: asGroup ? '' : menuRequest.trim(),
-        ageGroup: asGroup ? 'adult' : ageGroup,
-        isGroup: asGroup,
-        groupSize: asGroup ? members.length : 1,
-        members: asGroup
-          ? members.map((m) => ({
-              ...m,
-              name: m.name.trim(),
-              allergies: m.allergies.trim(),
-              menuRequest: m.menuRequest.trim(),
-              carteItemIds: m.carteItemIds || [],
-              ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
-            }))
-          : [],
-      })
+      const mine = loadMyRsvp(gathering.id)
+      const result = await addAttendee(
+        gathering.id,
+        {
+          name: name.trim(),
+          registeredBy: registrar,
+          email: email.trim(),
+          phone: phone.trim(),
+          menuItemIds: asGroup ? [] : menuItemIds,
+          carteItemIds: asGroup ? [] : carteItemIds,
+          allergies: asGroup ? '' : allergies.trim(),
+          notes: notes.trim(),
+          menuRequest: asGroup ? '' : menuRequest.trim(),
+          ageGroup: asGroup ? 'adult' : ageGroup,
+          isGroup: asGroup,
+          groupSize: asGroup ? members.length : 1,
+          guestKey: mine?.guestKey,
+          members: asGroup
+            ? members.map((m) => ({
+                ...m,
+                name: m.name.trim(),
+                allergies: m.allergies.trim(),
+                menuRequest: m.menuRequest.trim(),
+                carteItemIds: m.carteItemIds || [],
+                ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
+              }))
+            : [],
+        },
+        { asGuest: true },
+      )
 
       const summary = asGroup
         ? `${name.trim()} · ${members.length} ${
@@ -359,7 +366,12 @@ export function RsvpPage() {
         email: email.trim(),
         phone: phone.trim(),
       })
-      saveMyRsvp(gathering.id, result.attendeeId, email.trim())
+      saveMyRsvp(
+        gathering.id,
+        result.attendeeId,
+        email.trim(),
+        result.guestKey || mine?.guestKey,
+      )
       clearRsvpDraft(gathering.id)
       setLastSummary(summary)
       setRsvpUpdated(result.updated)
@@ -770,11 +782,11 @@ export function RsvpPage() {
               </div>
             )}
 
-            {gathering.menuCardUrl && (
+            {safeMediaUrl(gathering.menuCardUrl) && (
               <details className="collapsible-details">
                 <summary>{t('viewMenuCard')}</summary>
                 <div className="menu-card-preview">
-                  <img src={gathering.menuCardUrl} alt={t('menuCard')} />
+                  <img src={safeMediaUrl(gathering.menuCardUrl)} alt={t('menuCard')} />
                 </div>
               </details>
             )}

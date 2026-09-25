@@ -45,6 +45,8 @@ export type Attendee = {
   isGroup: boolean
   groupSize: number
   members: GroupMember[]
+  /** Opaque key required to update this RSVP; only returned on create/update. */
+  guestKey?: string
 }
 
 export type InboxMessage = {
