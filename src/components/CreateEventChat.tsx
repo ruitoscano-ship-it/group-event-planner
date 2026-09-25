@@ -23,15 +23,10 @@ const emptyForm: GatheringInput = {
 type Props = {
   onCancel: () => void
   onCreate: (input: GatheringInput) => Promise<void>
-  /** First-event guided mode with welcome + tips under each step. */
-  assisted?: boolean
 }
 
-export function CreateEventChat({ onCancel, onCreate, assisted = false }: Props) {
+export function CreateEventChat({ onCancel, onCreate }: Props) {
   const { t } = useI18n()
-  const [phase, setPhase] = useState<'welcome' | 'chat'>(
-    assisted ? 'welcome' : 'chat',
-  )
   const [step, setStep] = useState<Step>('title')
   const [form, setForm] = useState<GatheringInput>(emptyForm)
   const [bubble, setBubble] = useState(() => t('createChatAskTitle'))
@@ -42,23 +37,9 @@ export function CreateEventChat({ onCancel, onCreate, assisted = false }: Props)
 
   const stepIndex = STEPS.indexOf(step)
 
-  const tip =
-    assisted && !reaction && !saving
-      ? (
-          {
-            title: t('assistedTipTitle'),
-            type: t('assistedTipType'),
-            when: t('assistedTipWhen'),
-            where: t('assistedTipWhere'),
-            who: t('assistedTipWho'),
-            notes: t('assistedTipNotes'),
-          } as const
-        )[step]
-      : null
-
   useEffect(() => {
-    if (phase === 'chat') inputRef.current?.focus()
-  }, [step, phase])
+    inputRef.current?.focus()
+  }, [step])
 
   function askFor(next: Step) {
     const prompts: Record<Step, string> = {
@@ -80,7 +61,7 @@ export function CreateEventChat({ onCancel, onCreate, assisted = false }: Props)
       setReaction(null)
       if (next === 'done') return
       askFor(next)
-    }, assisted ? 900 : 700)
+    }, 700)
   }
 
   async function finish() {
@@ -143,7 +124,7 @@ export function CreateEventChat({ onCancel, onCreate, assisted = false }: Props)
   function goNextFromWho(e: FormEvent) {
     e.preventDefault()
     reactAndAdvance(
-      form.organizerName?.trim()
+      (form.organizerName || '').trim()
         ? ['createChatReactWho1', 'createChatReactWho2']
         : ['createChatReactSkip1', 'createChatReactSkip2'],
       'notes',
@@ -152,11 +133,10 @@ export function CreateEventChat({ onCancel, onCreate, assisted = false }: Props)
 
   function goNextFromNotes(e: FormEvent) {
     e.preventDefault()
-    const msg = pickFeedback(t, [
-      'createChatReactNotes1',
-      'createChatReactNotes2',
-      'createChatReactReady1',
-    ] as never)
+    const keys = form.notes.trim()
+      ? (['createChatReactNotes1', 'createChatReactNotes2', 'createChatReactReady1'] as const)
+      : (['createChatReactReady1', 'createChatReactReady2'] as const)
+    const msg = pickFeedback(t, [...keys])
     setReaction(msg)
     window.setTimeout(() => {
       setReaction(null)
@@ -165,17 +145,14 @@ export function CreateEventChat({ onCancel, onCreate, assisted = false }: Props)
   }
 
   function skipWhere() {
-    setForm((prev) => ({ ...prev, location: '' }))
     reactAndAdvance(['createChatReactSkip1', 'createChatReactSkip2'], 'who')
   }
 
   function skipWho() {
-    setForm((prev) => ({ ...prev, organizerName: '' }))
     reactAndAdvance(['createChatReactSkip1', 'createChatReactSkip2'], 'notes')
   }
 
   function skipNotes() {
-    setForm((prev) => ({ ...prev, notes: '' }))
     const msg = pickFeedback(t, ['createChatReactReady1', 'createChatReactReady2'] as never)
     setReaction(msg)
     window.setTimeout(() => {
@@ -185,36 +162,7 @@ export function CreateEventChat({ onCancel, onCreate, assisted = false }: Props)
   }
 
   return (
-    <section className={`landing-panel create-chat ${assisted ? 'is-assisted' : ''}`}>
-      {phase === 'welcome' ? (
-        <div className="assisted-welcome">
-          <p className="assisted-badge">{t('assistedBadge')}</p>
-          <h2>{t('assistedWelcomeTitle')}</h2>
-          <p className="sub">{t('assistedWelcomeBody')}</p>
-          <ol className="assisted-roadmap">
-            <li>{t('assistedRoadmap1')}</li>
-            <li>{t('assistedRoadmap2')}</li>
-            <li>{t('assistedRoadmap3')}</li>
-            <li>{t('assistedRoadmap4')}</li>
-          </ol>
-          <div className="create-chat-actions">
-            <button className="btn btn-ghost btn-cancel" type="button" onClick={onCancel}>
-              {t('cancel')}
-            </button>
-            <button
-              className="btn btn-accent"
-              type="button"
-              onClick={() => {
-                setPhase('chat')
-                askFor('title')
-              }}
-            >
-              {t('assistedStart')}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <>
+    <section className="landing-panel create-chat">
       <div className="landing-panel-head">
         <div className="create-chat-progress" aria-hidden>
           {STEPS.map((key, i) => (
@@ -226,29 +174,19 @@ export function CreateEventChat({ onCancel, onCreate, assisted = false }: Props)
             />
           ))}
         </div>
-        <div className="create-chat-head-actions">
-          {assisted && <span className="assisted-badge-sm">{t('assistedBadge')}</span>}
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm btn-cancel"
-            onClick={onCancel}
-            disabled={saving}
-          >
-            {t('cancel')}
-          </button>
-        </div>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm btn-cancel"
+          onClick={onCancel}
+          disabled={saving}
+        >
+          {t('cancel')}
+        </button>
       </div>
-
-      {assisted && (
-        <p className="assisted-step-label">
-          {t('assistedStepOf', { n: stepIndex + 1, total: STEPS.length })}
-        </p>
-      )}
 
       <div className="create-chat-bubble" key={bubble + (reaction || '')}>
         <p>{reaction || bubble}</p>
       </div>
-      {tip && <p className="create-chat-tip">{tip}</p>}
 
       {error && <p className="allergy">{error}</p>}
 
@@ -265,13 +203,6 @@ export function CreateEventChat({ onCancel, onCreate, assisted = false }: Props)
             autoComplete="off"
           />
           <div className="create-chat-actions">
-            <button
-              className="btn btn-ghost btn-cancel"
-              type="button"
-              onClick={onCancel}
-            >
-              {t('cancel')}
-            </button>
             <button className="btn btn-accent" type="submit" disabled={!form.title.trim()}>
               {t('createChatContinue')}
             </button>
@@ -325,14 +256,6 @@ export function CreateEventChat({ onCancel, onCreate, assisted = false }: Props)
             </label>
           </div>
           <div className="create-chat-actions">
-            <button
-              className="btn btn-ghost btn-cancel"
-              type="button"
-              onClick={onCancel}
-              disabled={saving}
-            >
-              {t('cancel')}
-            </button>
             <button className="btn btn-accent" type="submit">
               {t('createChatContinue')}
             </button>
@@ -352,14 +275,6 @@ export function CreateEventChat({ onCancel, onCreate, assisted = false }: Props)
             autoComplete="street-address"
           />
           <div className="create-chat-actions">
-            <button
-              className="btn btn-ghost btn-cancel"
-              type="button"
-              onClick={onCancel}
-              disabled={saving}
-            >
-              {t('cancel')}
-            </button>
             <button className="btn btn-ghost" type="button" onClick={skipWhere}>
               {t('createChatSkip')}
             </button>
@@ -382,14 +297,6 @@ export function CreateEventChat({ onCancel, onCreate, assisted = false }: Props)
             autoComplete="name"
           />
           <div className="create-chat-actions">
-            <button
-              className="btn btn-ghost btn-cancel"
-              type="button"
-              onClick={onCancel}
-              disabled={saving}
-            >
-              {t('cancel')}
-            </button>
             <button className="btn btn-ghost" type="button" onClick={skipWho}>
               {t('createChatSkip')}
             </button>
@@ -412,14 +319,6 @@ export function CreateEventChat({ onCancel, onCreate, assisted = false }: Props)
             rows={3}
           />
           <div className="create-chat-actions">
-            <button
-              className="btn btn-ghost btn-cancel"
-              type="button"
-              onClick={onCancel}
-              disabled={saving}
-            >
-              {t('cancel')}
-            </button>
             <button className="btn btn-ghost" type="button" onClick={skipNotes}>
               {t('createChatSkip')}
             </button>
@@ -433,10 +332,8 @@ export function CreateEventChat({ onCancel, onCreate, assisted = false }: Props)
       {saving && (
         <div className="create-chat-saving" role="status">
           <span className="create-chat-spinner" aria-hidden />
-          <p>{assisted ? t('assistedCreating') : t('createChatCreating')}</p>
+          <p>{t('createChatCreating')}</p>
         </div>
-      )}
-        </>
       )}
     </section>
   )

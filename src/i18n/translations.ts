@@ -60,6 +60,7 @@ export const translations = {
     homeAboutMoneyBody:
       'Veja totais, quem já pagou e quem ainda deve. Exporte um relatório simples para a mesa ou para imprimir.',
     footerTagline: 'Encontros de amigos, sem drama de organização.',
+    footerNavLabel: 'Informação legal',
     footerPrivacyTitle: 'Privacidade',
     footerPrivacyBody:
       'Os dados do evento ficam associados ao código do organizador e ao link de RSVP. Não vendemos dados nem usamos a informação para publicidade.',
@@ -532,6 +533,7 @@ export const translations = {
     homeAboutMoneyBody:
       'See totals, who’s paid, and who’s still due. Export a simple report for the table or to print.',
     footerTagline: 'Friend gatherings, without the planning drama.',
+    footerNavLabel: 'Legal information',
     footerPrivacyTitle: 'Privacy',
     footerPrivacyBody:
       'Event data is tied to the organizer code and RSVP link. We don’t sell data or use it for advertising.',

@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { CreateEventChat } from '../components/CreateEventChat'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
@@ -15,23 +15,21 @@ export function HomePage() {
   const { t } = useI18n()
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>('choose')
-  const [assisted, setAssisted] = useState(false)
   const [accessCode, setAccessCode] = useState('')
   const [accessBusy, setAccessBusy] = useState(false)
   const [accessError, setAccessError] = useState<string | null>(null)
-  const firstEvent = useMemo(() => shouldUseAssistedMode(), [])
 
   function goHome() {
     setMode('choose')
-    setAssisted(false)
     setAccessError(null)
     setAccessCode('')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   async function handleCreate(input: GatheringInput) {
+    const guideAfterCreate = shouldUseAssistedMode()
     const created = await createGathering(input)
-    const q = assisted ? 'created=1&assisted=1' : 'created=1'
+    const q = guideAfterCreate ? 'created=1&assisted=1' : 'created=1'
     navigate(`/events/${created.gathering.id}?${q}`, { viewTransition: true })
   }
 
@@ -67,19 +65,15 @@ export function HomePage() {
       </header>
 
       <section className="landing">
-          <div
-            className="landing-visual"
-            role="img"
-            aria-label={t('brandAria')}
-          >
-            <img
-              className="landing-visual-img"
-              src="/landing-hero.jpg"
-              alt=""
-              decoding="async"
-              fetchPriority="high"
-            />
-          </div>
+        <div className="landing-visual" role="img" aria-label={t('brandAria')}>
+          <img
+            className="landing-visual-img"
+            src="/landing-hero.jpg"
+            alt=""
+            decoding="async"
+            fetchPriority="high"
+          />
+        </div>
         <div className="landing-copy">
           <p className="brand landing-brand">
             Round<span>.</span>
@@ -91,17 +85,10 @@ export function HomePage() {
               <button
                 className="btn btn-accent landing-action"
                 type="button"
-                onClick={() => {
-                  const guide = shouldUseAssistedMode()
-                  setAssisted(guide)
-                  setMode('create')
-                }}
+                onClick={() => setMode('create')}
               >
-                {firstEvent ? t('createFirstEvent') : t('createEvent')}
+                {t('createEvent')}
               </button>
-              {firstEvent && (
-                <p className="assisted-landing-hint">{t('assistedLandingHint')}</p>
-              )}
               <button
                 className="btn btn-ghost landing-action"
                 type="button"
@@ -116,11 +103,7 @@ export function HomePage() {
           )}
 
           {mode === 'create' && (
-            <CreateEventChat
-              assisted={assisted}
-              onCancel={goHome}
-              onCreate={handleCreate}
-            />
+            <CreateEventChat onCancel={goHome} onCreate={handleCreate} />
           )}
 
           {mode === 'code' && (
@@ -192,25 +175,27 @@ export function HomePage() {
       )}
 
       <footer className="site-footer">
-        <div className="site-footer-brand">
-          <strong>
-            Round<span>.</span>
-          </strong>
-          <p>{t('footerTagline')}</p>
-        </div>
-        <div className="site-footer-cols">
-          <div>
-            <h3>{t('footerPrivacyTitle')}</h3>
-            <p>{t('footerPrivacyBody')}</p>
+        <div className="site-footer-main">
+          <div className="site-footer-brand">
+            <strong>
+              Round<span>.</span>
+            </strong>
+            <p>{t('footerTagline')}</p>
           </div>
-          <div>
-            <h3>{t('footerDisclaimerTitle')}</h3>
-            <p>{t('footerDisclaimerBody')}</p>
-          </div>
-          <div>
-            <h3>{t('footerTermsTitle')}</h3>
-            <p>{t('footerTermsBody')}</p>
-          </div>
+          <nav className="site-footer-nav" aria-label={t('footerNavLabel')}>
+            <details className="site-footer-disclosure">
+              <summary>{t('footerPrivacyTitle')}</summary>
+              <p>{t('footerPrivacyBody')}</p>
+            </details>
+            <details className="site-footer-disclosure">
+              <summary>{t('footerDisclaimerTitle')}</summary>
+              <p>{t('footerDisclaimerBody')}</p>
+            </details>
+            <details className="site-footer-disclosure">
+              <summary>{t('footerTermsTitle')}</summary>
+              <p>{t('footerTermsBody')}</p>
+            </details>
+          </nav>
         </div>
         <p className="site-footer-copy">
           {t('footerCopyright', { year: new Date().getFullYear() })}
