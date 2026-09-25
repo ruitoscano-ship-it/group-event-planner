@@ -16,6 +16,7 @@ export type RsvpDraft = {
   asGroup: boolean
   members: GroupMember[]
   menuItemIds: string[]
+  carteItemIds: string[]
   allergies: string
   email: string
   phone: string

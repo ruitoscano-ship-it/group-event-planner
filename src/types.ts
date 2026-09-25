@@ -10,12 +10,20 @@ export type MenuItem = {
   isAlaCarte: boolean
 }
 
+/** Dish on the event carte (from OCR or manually added by organizer). */
+export type CarteItem = {
+  id: string
+  name: string
+}
+
 export type GroupMember = {
   id: string
   name: string
   menuItemIds: string[]
+  /** Multi-pick from the approved event carte */
+  carteItemIds: string[]
   allergies: string
-  /** Free-text order from a printed menu / carte */
+  /** Free-text extras beyond carte / fixed menu */
   menuRequest: string
   ageGroup: AgeGroup
 }
@@ -27,17 +35,15 @@ export type Attendee = {
   email: string
   phone: string
   menuItemIds: string[]
+  carteItemIds: string[]
   allergies: string
   notes: string
-  /** Free-text order from a printed menu / carte */
   menuRequest: string
   ageGroup: AgeGroup
   amountPaid: number
   createdAt: string
-  /** Family / group registration */
   isGroup: boolean
   groupSize: number
-  /** Per-person menu picks when registering as a group */
   members: GroupMember[]
 }
 
@@ -63,10 +69,11 @@ export type Gathering = {
   organizerName: string
   organizerEmail: string
   organizerPhone: string
-  /** Uploaded image path or external URL to the printed menu / carte */
   menuCardUrl: string
-  /** Dish lines extracted from the menu card via OCR */
-  menuOcrLines: string[]
+  /** Editable event carte (organizer-managed, often from OCR) */
+  carteItems: CarteItem[]
+  /** When true, invitees can multi-pick from the carte */
+  carteApproved: boolean
   menu: MenuItem[]
   attendees: Attendee[]
   messages: InboxMessage[]
@@ -75,10 +82,18 @@ export type Gathering = {
 
 export type GatheringInput = Omit<
   Gathering,
-  'id' | 'menu' | 'attendees' | 'messages' | 'createdAt' | 'menuCardUrl' | 'menuOcrLines'
+  | 'id'
+  | 'menu'
+  | 'attendees'
+  | 'messages'
+  | 'createdAt'
+  | 'menuCardUrl'
+  | 'carteItems'
+  | 'carteApproved'
 > & {
   menuCardUrl?: string
-  menuOcrLines?: string[]
+  carteItems?: CarteItem[]
+  carteApproved?: boolean
 }
 
 export type MessageInput = {

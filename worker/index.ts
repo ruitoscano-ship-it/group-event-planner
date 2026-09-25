@@ -26,16 +26,25 @@ function newId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().slice(0, 8)}`
 }
 
-function normalizeGathering(raw: Gathering): Gathering {
+function normalizeGathering(raw: Gathering & { menuOcrLines?: string[] }): Gathering {
+  const legacyLines = Array.isArray(raw.menuOcrLines)
+    ? raw.menuOcrLines.map((line) => String(line || '').trim()).filter(Boolean)
+    : []
+  const carteItems = Array.isArray(raw.carteItems)
+    ? raw.carteItems
+        .map((item) => ({
+          id: item.id || newId('carte'),
+          name: String(item.name || '').trim(),
+        }))
+        .filter((item) => item.name)
+        .slice(0, 120)
+    : legacyLines.map((name) => ({ id: newId('carte'), name })).slice(0, 120)
+
   return {
     ...raw,
     menuCardUrl: raw.menuCardUrl || '',
-    menuOcrLines: Array.isArray(raw.menuOcrLines)
-      ? raw.menuOcrLines
-          .map((line) => String(line || '').trim())
-          .filter(Boolean)
-          .slice(0, 120)
-      : [],
+    carteItems,
+    carteApproved: Boolean(raw.carteApproved) && carteItems.length > 0,
     organizerName: (raw.organizerName || '').trim(),
     organizerEmail: (raw.organizerEmail || '').trim(),
     organizerPhone: (raw.organizerPhone || '').trim(),
@@ -50,6 +59,7 @@ function normalizeGathering(raw: Gathering): Gathering {
             id: m.id || newId('m'),
             name: (m.name || '').trim(),
             menuItemIds: Array.isArray(m.menuItemIds) ? m.menuItemIds : [],
+            carteItemIds: Array.isArray(m.carteItemIds) ? m.carteItemIds : [],
             allergies: (m.allergies || '').trim(),
             menuRequest: (m.menuRequest || '').trim(),
             ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
@@ -61,6 +71,7 @@ function normalizeGathering(raw: Gathering): Gathering {
         email: (a.email || '').trim(),
         phone: (a.phone || '').trim(),
         menuRequest: (a.menuRequest || '').trim(),
+        carteItemIds: Array.isArray(a.carteItemIds) ? a.carteItemIds : [],
         ageGroup: a.ageGroup === 'child' ? 'child' : 'adult',
         isGroup,
         members,
@@ -187,7 +198,8 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       organizerEmail: (body.organizerEmail || '').trim(),
       organizerPhone: (body.organizerPhone || '').trim(),
       menuCardUrl: (body.menuCardUrl || '').trim(),
-      menuOcrLines: [],
+      carteItems: [],
+      carteApproved: false,
       menu: [],
       attendees: [],
       messages: [],
@@ -259,24 +271,39 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       return error('Image is too large. Use a smaller file or a link.', 413)
     }
     gathering.menuCardUrl = urlValue
-    if (!urlValue) gathering.menuOcrLines = []
+    if (!urlValue) {
+      gathering.carteItems = []
+      gathering.carteApproved = false
+    }
     await writeGathering(env.DB, gathering, false)
     return json(gathering)
   }
 
-  const menuOcrMatch = path.match(/^\/api\/gatherings\/([^/]+)\/menu-ocr$/)
-  if (menuOcrMatch && method === 'PUT') {
-    const id = decodeURIComponent(menuOcrMatch[1])
+  const menuCarteMatch = path.match(/^\/api\/gatherings\/([^/]+)\/menu-carte$/)
+  if (menuCarteMatch && method === 'PUT') {
+    const id = decodeURIComponent(menuCarteMatch[1])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
-    const body = (await request.json()) as { lines?: unknown }
-    const lines = Array.isArray(body.lines)
-      ? body.lines
-          .map((line) => String(line || '').trim())
-          .filter((line) => line.length >= 2 && line.length <= 120)
+    const body = (await request.json()) as {
+      items?: unknown
+      approved?: unknown
+    }
+    const items = Array.isArray(body.items)
+      ? body.items
+          .map((item) => {
+            const row = item as { id?: string; name?: string }
+            const name = String(row?.name || '').trim()
+            if (!name || name.length > 120) return null
+            return {
+              id: row.id || newId('carte'),
+              name,
+            }
+          })
+          .filter((item): item is { id: string; name: string } => item !== null)
           .slice(0, 120)
-      : []
-    gathering.menuOcrLines = lines
+      : gathering.carteItems
+    gathering.carteItems = items
+    gathering.carteApproved = Boolean(body.approved) && items.length > 0
     await writeGathering(env.DB, gathering, false)
     return json(gathering)
   }
@@ -336,6 +363,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
           id: m.id || newId('m'),
           name: (m.name || '').trim(),
           menuItemIds: Array.isArray(m.menuItemIds) ? m.menuItemIds : [],
+          carteItemIds: Array.isArray(m.carteItemIds) ? m.carteItemIds : [],
           allergies: (m.allergies || '').trim(),
           menuRequest: (m.menuRequest || '').trim(),
           ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
@@ -354,6 +382,11 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
         ? []
         : Array.isArray(body.menuItemIds)
           ? body.menuItemIds
+          : [],
+      carteItemIds: isGroup
+        ? []
+        : Array.isArray(body.carteItemIds)
+          ? body.carteItemIds
           : [],
       allergies: (body.allergies || '').trim(),
       notes: (body.notes || '').trim(),
@@ -389,6 +422,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
                 id: m.id || newId('m'),
                 name: (m.name || '').trim(),
                 menuItemIds: Array.isArray(m.menuItemIds) ? m.menuItemIds : [],
+                carteItemIds: Array.isArray(m.carteItemIds) ? m.carteItemIds : [],
                 allergies: (m.allergies || '').trim(),
                 menuRequest: (m.menuRequest || '').trim(),
                 ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
@@ -409,6 +443,12 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
           body.menuRequest !== undefined
             ? String(body.menuRequest).trim()
             : current.menuRequest || '',
+        carteItemIds:
+          body.carteItemIds !== undefined
+            ? Array.isArray(body.carteItemIds)
+              ? body.carteItemIds
+              : []
+            : current.carteItemIds || [],
         ageGroup:
           body.ageGroup !== undefined
             ? body.ageGroup === 'child'

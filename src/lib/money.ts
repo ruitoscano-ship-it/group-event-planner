@@ -1,4 +1,11 @@
-import type { AgeGroup, Attendee, Gathering, GroupMember, MenuItem } from '../types'
+import type {
+  AgeGroup,
+  Attendee,
+  CarteItem,
+  Gathering,
+  GroupMember,
+  MenuItem,
+} from '../types'
 
 export function formatMoney(
   amount: number,
@@ -33,6 +40,7 @@ export function createMemberDraft(partial?: Partial<GroupMember>): GroupMember {
     id: `m_${crypto.randomUUID().slice(0, 8)}`,
     name: '',
     menuItemIds: [],
+    carteItemIds: [],
     allergies: '',
     menuRequest: '',
     ageGroup: 'adult',
@@ -132,6 +140,40 @@ export function menuLabel(
   return ids
     .map((id) => menu.find((m) => m.id === id)?.name ?? 'Unknown')
     .join(', ')
+}
+
+export function carteLabel(
+  ids: string[],
+  carte: CarteItem[],
+  noSelection = '',
+): string {
+  if (!ids.length) return noSelection
+  return ids
+    .map((id) => carte.find((c) => c.id === id)?.name)
+    .filter(Boolean)
+    .join(', ')
+}
+
+export function toggleCarteSelection(currentIds: string[], itemId: string): string[] {
+  return currentIds.includes(itemId)
+    ? currentIds.filter((id) => id !== itemId)
+    : [...currentIds, itemId]
+}
+
+/** Combined display of fixed menu + carte picks + free-text extras. */
+export function personOrderLabel(
+  menuItemIds: string[],
+  carteItemIds: string[],
+  menuRequest: string,
+  gathering: Gathering,
+  noSelection = 'No selection',
+): string {
+  const parts = [
+    menuLabel(menuItemIds, gathering.menu, ''),
+    carteLabel(carteItemIds, gathering.carteItems || [], ''),
+    (menuRequest || '').trim(),
+  ].filter(Boolean)
+  return parts.length ? parts.join(' · ') : noSelection
 }
 
 /** Toggle menu selection with exclusivity between fixed menus and à la carte. */

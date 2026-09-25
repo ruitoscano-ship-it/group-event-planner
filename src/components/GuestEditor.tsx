@@ -3,7 +3,7 @@ import { useI18n } from '../i18n/I18nContext'
 import {
   createMemberDraft,
   formatMoney,
-  menuLabel,
+  personOrderLabel,
   partySize,
   selectionHasAlaCarte,
   toggleMenuSelection,
@@ -19,21 +19,24 @@ type Props = {
   gathering: Gathering
   attendee: Attendee
   editing: boolean
-  ocrLines?: string[]
-  onOcrLines?: (lines: string[]) => void
-  saveOcrLines?: (lines: string[]) => Promise<void>
   onToggleEdit: () => void
   onSave: (patch: Partial<Attendee>) => Promise<void>
   onRemove: () => void
+}
+
+function withCarteDefaults(m: GroupMember): GroupMember {
+  return {
+    ...m,
+    carteItemIds: Array.isArray(m.carteItemIds) ? m.carteItemIds : [],
+    menuRequest: m.menuRequest || '',
+    ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
+  }
 }
 
 export function GuestEditor({
   gathering,
   attendee,
   editing,
-  ocrLines = [],
-  onOcrLines,
-  saveOcrLines,
   onToggleEdit,
   onSave,
   onRemove,
@@ -41,7 +44,7 @@ export function GuestEditor({
   const { t, localeTag } = useI18n()
   const [draft, setDraft] = useState(attendee)
   const [members, setMembers] = useState<GroupMember[]>(
-    attendee.members?.length ? attendee.members : [],
+    attendee.members?.length ? attendee.members.map(withCarteDefaults) : [],
   )
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -50,18 +53,13 @@ export function GuestEditor({
   useEffect(() => {
     if (!editing) return
     setMembers(
-      attendee.members?.length
-        ? attendee.members.map((m) => ({
-            ...m,
-            menuRequest: m.menuRequest || '',
-            ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
-          }))
-        : [],
+      attendee.members?.length ? attendee.members.map(withCarteDefaults) : [],
     )
     setDraft({
       ...attendee,
       ageGroup: attendee.ageGroup === 'child' ? 'child' : 'adult',
       menuRequest: attendee.menuRequest || '',
+      carteItemIds: Array.isArray(attendee.carteItemIds) ? attendee.carteItemIds : [],
     })
     setMsg(null)
     setError(false)
@@ -69,7 +67,10 @@ export function GuestEditor({
 
   const owed = attendeeTotal(attendee, gathering.menu)
   const variable = selectionHasAlaCarte(attendee, gathering.menu)
-  const showMenuRequest = Boolean(gathering.menuCardUrl)
+  const showOrderField =
+    Boolean(gathering.menuCardUrl) ||
+    Boolean(gathering.carteApproved && gathering.carteItems?.length)
+  const carteItems = gathering.carteItems || []
 
   async function handleSave(e: FormEvent) {
     e.preventDefault()
@@ -87,6 +88,7 @@ export function GuestEditor({
         menuRequest: draft.isGroup ? '' : draft.menuRequest.trim(),
         ageGroup: draft.isGroup ? 'adult' : draft.ageGroup === 'child' ? 'child' : 'adult',
         menuItemIds: draft.isGroup ? [] : draft.menuItemIds,
+        carteItemIds: draft.isGroup ? [] : draft.carteItemIds || [],
         isGroup: draft.isGroup,
         members: draft.isGroup
           ? members.map((m) => ({
@@ -94,6 +96,7 @@ export function GuestEditor({
               name: m.name.trim(),
               allergies: m.allergies.trim(),
               menuRequest: m.menuRequest.trim(),
+              carteItemIds: m.carteItemIds || [],
               ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
             }))
           : [],
@@ -153,12 +156,15 @@ export function GuestEditor({
               )}
               {!attendee.isGroup || !attendee.members?.length ? (
                 <span className="chip">
-                  {menuLabel(attendee.menuItemIds, gathering.menu, t('noSelection'))}
+                  {personOrderLabel(
+                    attendee.menuItemIds,
+                    attendee.carteItemIds || [],
+                    attendee.menuRequest || '',
+                    gathering,
+                    t('noSelection'),
+                  )}
                 </span>
               ) : null}
-              {attendee.menuRequest && (
-                <span className="chip chip-muted">{attendee.menuRequest}</span>
-              )}
               <span className="chip chip-warm">
                 {formatMoney(owed, gathering.currency, localeTag)}
                 {variable ? ' +' : ''}
@@ -178,8 +184,13 @@ export function GuestEditor({
                     {' · '}
                     {m.ageGroup === 'child' ? t('ageChild') : t('ageAdult')}
                     {' · '}
-                    {menuLabel(m.menuItemIds, gathering.menu, t('noSelection'))}
-                    {m.menuRequest ? ` · ${m.menuRequest}` : ''}
+                    {personOrderLabel(
+                      m.menuItemIds,
+                      m.carteItemIds || [],
+                      m.menuRequest || '',
+                      gathering,
+                      t('noSelection'),
+                    )}
                     {m.allergies ? (
                       <>
                         {' · '}
@@ -204,15 +215,12 @@ export function GuestEditor({
                 {msg}
               </div>
             )}
-            {(gathering.menuCardUrl || gathering.menu.length > 0) && (
+            {(gathering.menuCardUrl ||
+              gathering.menu.length > 0 ||
+              (gathering.carteApproved && carteItems.length > 0)) && (
               <div className="menu-peek-bar">
                 <p className="sub">{t('menuPeekHint')}</p>
-                <MenuSheet
-                  gathering={gathering}
-                  compact
-                  onOcrLines={onOcrLines}
-                  saveOcrLines={saveOcrLines}
-                />
+                <MenuSheet gathering={gathering} compact />
               </div>
             )}
             <div className="form-grid">
@@ -328,13 +336,18 @@ export function GuestEditor({
                           emptyLabel={t('organizerNoMenu')}
                         />
                       )}
-                      {showMenuRequest && (
+                      {showOrderField && (
                         <MenuOrderField
-                          value={member.menuRequest}
-                          onChange={(value) =>
+                          carteItems={carteItems}
+                          carteApproved={Boolean(gathering.carteApproved)}
+                          selectedCarteIds={member.carteItemIds || []}
+                          onCarteChange={(ids) =>
+                            updateMember(member.id, { carteItemIds: ids })
+                          }
+                          menuRequest={member.menuRequest}
+                          onMenuRequestChange={(value) =>
                             updateMember(member.id, { menuRequest: value })
                           }
-                          ocrLines={ocrLines}
                           placeholder={t('menuRequestPlaceholder')}
                         />
                       )}
@@ -372,14 +385,19 @@ export function GuestEditor({
                     />
                   </>
                 )}
-                {showMenuRequest && (
+                {showOrderField && (
                   <div style={{ marginTop: '0.75rem' }}>
                     <MenuOrderField
-                      value={draft.menuRequest}
-                      onChange={(value) =>
+                      carteItems={carteItems}
+                      carteApproved={Boolean(gathering.carteApproved)}
+                      selectedCarteIds={draft.carteItemIds || []}
+                      onCarteChange={(ids) =>
+                        setDraft({ ...draft, carteItemIds: ids })
+                      }
+                      menuRequest={draft.menuRequest}
+                      onMenuRequestChange={(value) =>
                         setDraft({ ...draft, menuRequest: value })
                       }
-                      ocrLines={ocrLines}
                       placeholder={t('menuRequestPlaceholder')}
                     />
                   </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AgeGroupPicker } from '../components/AgeGroupPicker'
+import { EventCarteEditor } from '../components/EventCarteEditor'
 import { GuestEditor } from '../components/GuestEditor'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { MenuOrderField } from '../components/MenuOrderField'
@@ -15,13 +16,12 @@ import {
   formatMoney,
   gatheringTotals,
   idsHaveAlaCarte,
-  menuLabel,
+  personOrderLabel,
   partySize,
   selectionHasAlaCarte,
   toggleMenuSelection,
   unitPriceForIds,
 } from '../lib/money'
-import { loadCachedOcrLines } from '../lib/menuOcr'
 import { buildEventReportHtml, openEventReport } from '../lib/report'
 import {
   detailsSavedKeys,
@@ -53,7 +53,7 @@ export function EventPage() {
     removeAttendee,
     markMessageRead,
     deleteMessage,
-    setMenuOcr,
+    setMenuCarte,
   } = useGatherings()
   const gathering = getGathering(eventId)
   const [fetching, setFetching] = useState(!gathering)
@@ -89,6 +89,7 @@ export function EventPage() {
     name: '',
     asGroup: false,
     menuItemIds: [] as string[],
+    carteItemIds: [] as string[],
     allergies: '',
     email: '',
     phone: '',
@@ -104,19 +105,6 @@ export function EventPage() {
   const [guestMsg, setGuestMsg] = useState<string | null>(null)
   const [guestError, setGuestError] = useState(false)
   const [reportMsg, setReportMsg] = useState<string | null>(null)
-  const [ocrLines, setOcrLines] = useState<string[]>([])
-
-  useEffect(() => {
-    if (!gathering?.menuCardUrl) {
-      setOcrLines([])
-      return
-    }
-    if (gathering.menuOcrLines?.length) {
-      setOcrLines(gathering.menuOcrLines)
-      return
-    }
-    setOcrLines(loadCachedOcrLines(gathering.menuCardUrl) || [])
-  }, [gathering?.menuCardUrl, gathering?.menuOcrLines])
 
   useEffect(() => {
     if (!eventId || gathering) {
@@ -380,8 +368,14 @@ export function EventPage() {
       }
       const incomplete = guestMembers.some((m) => {
         if (!m.name.trim()) return true
-        if (gathering.menu.length === 0) return false
-        return m.menuItemIds.length === 0 && !m.menuRequest.trim()
+        const hasFixed = gathering.menu.length > 0
+        const hasCarte = gathering.carteApproved && (gathering.carteItems || []).length > 0
+        if (!hasFixed && !hasCarte && !gathering.menuCardUrl) return false
+        return (
+          m.menuItemIds.length === 0 &&
+          !(m.carteItemIds || []).length &&
+          !m.menuRequest.trim()
+        )
       })
       if (incomplete) {
         setGuestMsg(t('needMemberMenus'))
@@ -400,6 +394,7 @@ export function EventPage() {
         email: guestForm.email.trim(),
         phone: guestForm.phone.trim(),
         menuItemIds: guestForm.asGroup ? [] : guestForm.menuItemIds,
+        carteItemIds: guestForm.asGroup ? [] : guestForm.carteItemIds,
         allergies: guestForm.asGroup ? '' : guestForm.allergies.trim(),
         notes: guestForm.notes.trim(),
         menuRequest: guestForm.asGroup ? '' : guestForm.menuRequest.trim(),
@@ -412,6 +407,7 @@ export function EventPage() {
               name: m.name.trim(),
               allergies: m.allergies.trim(),
               menuRequest: m.menuRequest.trim(),
+              carteItemIds: m.carteItemIds || [],
               ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
             }))
           : [],
@@ -420,6 +416,7 @@ export function EventPage() {
         name: '',
         asGroup: false,
         menuItemIds: [],
+        carteItemIds: [],
         allergies: '',
         email: '',
         phone: '',
@@ -516,21 +513,31 @@ export function EventPage() {
           <dl className="details-summary">
             <div>
               <dt>{t('date')}</dt>
+              <dd>
+                {gathering.date
+                  ? formatDate(gathering.date, localeTag, t('dateTbd'))
+                  : t('dateTbd')}
+              </dd>
             </div>
             <div>
               <dt>{t('time')}</dt>
+              <dd>{gathering.time || '—'}</dd>
             </div>
             <div className="full">
               <dt>{t('location')}</dt>
+              <dd>{gathering.location || t('locationTbd')}</dd>
             </div>
             <div>
               <dt>{t('organizerName')}</dt>
+              <dd>{gathering.organizerName || '—'}</dd>
             </div>
             <div>
               <dt>{t('organizerEmail')}</dt>
+              <dd>{gathering.organizerEmail || '—'}</dd>
             </div>
             <div className="full">
               <dt>{t('organizerPhone')}</dt>
+              <dd>{gathering.organizerPhone || '—'}</dd>
             </div>
           </dl>
         ) : (
@@ -747,6 +754,11 @@ export function EventPage() {
             )}
           </section>
 
+          <EventCarteEditor
+            gathering={gathering}
+            onSave={(items, approved) => setMenuCarte(gathering.id, items, approved)}
+          />
+
           <div className="layout-split">
             <section className="panel">
               <h2>{t('addMenuOption')}</h2>
@@ -872,14 +884,12 @@ export function EventPage() {
           <section className="panel">
             <h2>{t('organizerRegister')}</h2>
             <p className="sub">{t('organizerRegisterSub')}</p>
-            {(gathering.menuCardUrl || gathering.menu.length > 0) && (
+            {(gathering.menuCardUrl ||
+              gathering.menu.length > 0 ||
+              (gathering.carteApproved && (gathering.carteItems || []).length > 0)) && (
               <div className="menu-peek-bar">
                 <p className="sub">{t('menuPeekHint')}</p>
-                <MenuSheet
-                  gathering={gathering}
-                  onOcrLines={setOcrLines}
-                  saveOcrLines={(lines) => setMenuOcr(gathering.id, lines)}
-                />
+                <MenuSheet gathering={gathering} />
               </div>
             )}
             {guestMsg && (
@@ -1036,13 +1046,20 @@ export function EventPage() {
                             emptyLabel={t('organizerNoMenu')}
                           />
                         </div>
-                        {gathering.menuCardUrl && (
+                        {(gathering.menuCardUrl ||
+                          gathering.carteApproved ||
+                          gathering.menu.length === 0) && (
                           <MenuOrderField
-                            value={member.menuRequest}
-                            onChange={(value) =>
+                            carteItems={gathering.carteItems || []}
+                            carteApproved={Boolean(gathering.carteApproved)}
+                            selectedCarteIds={member.carteItemIds || []}
+                            onCarteChange={(ids) =>
+                              updateGuestMember(member.id, { carteItemIds: ids })
+                            }
+                            menuRequest={member.menuRequest}
+                            onMenuRequestChange={(value) =>
                               updateGuestMember(member.id, { menuRequest: value })
                             }
-                            ocrLines={ocrLines}
                             placeholder={t('menuRequestPlaceholder')}
                           />
                         )}
@@ -1081,14 +1098,21 @@ export function EventPage() {
                     }
                     emptyLabel={t('organizerNoMenu')}
                   />
-                  {gathering.menuCardUrl && (
+                  {(gathering.menuCardUrl ||
+                    gathering.carteApproved ||
+                    gathering.menu.length === 0) && (
                     <div style={{ marginTop: '0.85rem' }}>
                       <MenuOrderField
-                        value={guestForm.menuRequest}
-                        onChange={(value) =>
+                        carteItems={gathering.carteItems || []}
+                        carteApproved={Boolean(gathering.carteApproved)}
+                        selectedCarteIds={guestForm.carteItemIds}
+                        onCarteChange={(ids) =>
+                          setGuestForm({ ...guestForm, carteItemIds: ids })
+                        }
+                        menuRequest={guestForm.menuRequest}
+                        onMenuRequestChange={(value) =>
                           setGuestForm({ ...guestForm, menuRequest: value })
                         }
-                        ocrLines={ocrLines}
                         placeholder={t('menuRequestPlaceholder')}
                       />
                     </div>
@@ -1145,9 +1169,6 @@ export function EventPage() {
                     gathering={gathering}
                     attendee={a}
                     editing={editingGuestId === a.id}
-                    ocrLines={ocrLines}
-                    onOcrLines={setOcrLines}
-                    saveOcrLines={(lines) => setMenuOcr(gathering.id, lines)}
                     onToggleEdit={() =>
                       setEditingGuestId((id) => (id === a.id ? null : a.id))
                     }
@@ -1240,10 +1261,22 @@ export function EventPage() {
                           ? a.members
                               .map(
                                 (m) =>
-                                  `${m.name}: ${menuLabel(m.menuItemIds, gathering.menu, t('noSelection'))}`,
+                                  `${m.name}: ${personOrderLabel(
+                                    m.menuItemIds,
+                                    m.carteItemIds || [],
+                                    m.menuRequest || '',
+                                    gathering,
+                                    t('noSelection'),
+                                  )}`,
                               )
                               .join(' · ')
-                          : menuLabel(a.menuItemIds, gathering.menu, t('noSelection'))}
+                          : personOrderLabel(
+                              a.menuItemIds,
+                              a.carteItemIds || [],
+                              a.menuRequest || '',
+                              gathering,
+                              t('noSelection'),
+                            )}
                         {a.isGroup ? ` · ${t('groupBadge', { count: partySize(a) })}` : ''}
                       </p>
                       <div className="guest-meta">

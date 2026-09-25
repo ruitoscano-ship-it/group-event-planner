@@ -18,13 +18,12 @@ import {
   formatDate,
   formatMoney,
   idsHaveAlaCarte,
-  menuLabel,
+  personOrderLabel,
   partySize,
   toggleMenuSelection,
   unitPriceForIds,
 } from '../lib/money'
 import { pickFeedback, rsvpSuccessKeys } from '../lib/feedback'
-import { loadCachedOcrLines } from '../lib/menuOcr'
 import {
   clearRsvpDraft,
   loadGuestPrefs,
@@ -42,7 +41,7 @@ const STEPS: Step[] = ['who', 'menu', 'review']
 export function RsvpPage() {
   const { eventId = '' } = useParams()
   const { t, localeTag } = useI18n()
-  const { getGathering, ensureGathering, addAttendee, sendMessage, setMenuOcr } =
+  const { getGathering, ensureGathering, addAttendee, sendMessage } =
     useGatherings()
   const gathering = getGathering(eventId)
   const formTopRef = useRef<HTMLElement | null>(null)
@@ -62,10 +61,17 @@ export function RsvpPage() {
   const [asGroup, setAsGroup] = useState(draft?.asGroup ?? false)
   const [members, setMembers] = useState<GroupMember[]>(() =>
     draft?.members?.length
-      ? draft.members
+      ? draft.members.map((m) => ({
+          ...createMemberDraft(),
+          ...m,
+          carteItemIds: Array.isArray(m.carteItemIds) ? m.carteItemIds : [],
+        }))
       : [createMemberDraft(), createMemberDraft()],
   )
   const [menuItemIds, setMenuItemIds] = useState<string[]>(draft?.menuItemIds ?? [])
+  const [carteItemIds, setCarteItemIds] = useState<string[]>(
+    draft?.carteItemIds ?? [],
+  )
   const [allergies, setAllergies] = useState(draft?.allergies ?? '')
   const [email, setEmail] = useState(draft?.email ?? prefs.email ?? '')
   const [phone, setPhone] = useState(draft?.phone ?? prefs.phone ?? '')
@@ -87,19 +93,6 @@ export function RsvpPage() {
   const [contactBusy, setContactBusy] = useState(false)
   const [contactMsg, setContactMsg] = useState<string | null>(null)
   const [contactError, setContactError] = useState(false)
-  const [ocrLines, setOcrLines] = useState<string[]>([])
-
-  useEffect(() => {
-    if (!gathering?.menuCardUrl) {
-      setOcrLines([])
-      return
-    }
-    if (gathering.menuOcrLines?.length) {
-      setOcrLines(gathering.menuOcrLines)
-      return
-    }
-    setOcrLines(loadCachedOcrLines(gathering.menuCardUrl) || [])
-  }, [gathering?.menuCardUrl, gathering?.menuOcrLines])
 
   useEffect(() => {
     if (!eventId || gathering) {
@@ -127,6 +120,7 @@ export function RsvpPage() {
       asGroup,
       members,
       menuItemIds,
+      carteItemIds,
       allergies,
       email,
       phone,
@@ -143,6 +137,7 @@ export function RsvpPage() {
     asGroup,
     members,
     menuItemIds,
+    carteItemIds,
     allergies,
     email,
     phone,
@@ -171,17 +166,29 @@ export function RsvpPage() {
 
   const menuReady = useMemo(() => {
     if (!gathering) return false
+    const hasFixed = gathering.menu.length > 0
+    const hasCarte =
+      gathering.carteApproved && (gathering.carteItems || []).length > 0
+    const needsPick = hasFixed || hasCarte || Boolean(gathering.menuCardUrl)
     if (asGroup) {
       if (members.length === 0) return false
       return members.every((m) => {
         if (!m.name.trim()) return false
-        if (gathering.menu.length === 0) return true
-        return m.menuItemIds.length > 0 || Boolean(m.menuRequest.trim())
+        if (!needsPick) return true
+        return (
+          m.menuItemIds.length > 0 ||
+          (m.carteItemIds || []).length > 0 ||
+          Boolean(m.menuRequest.trim())
+        )
       })
     }
-    if (gathering.menu.length === 0) return true
-    return menuItemIds.length > 0 || Boolean(menuRequest.trim())
-  }, [gathering, asGroup, members, menuItemIds, menuRequest])
+    if (!needsPick) return true
+    return (
+      menuItemIds.length > 0 ||
+      carteItemIds.length > 0 ||
+      Boolean(menuRequest.trim())
+    )
+  }, [gathering, asGroup, members, menuItemIds, carteItemIds, menuRequest])
 
   function goTo(next: Step) {
     setSubmitError(null)
@@ -196,6 +203,7 @@ export function RsvpPage() {
     setAsGroup(false)
     setMembers([createMemberDraft(), createMemberDraft()])
     setMenuItemIds([])
+    setCarteItemIds([])
     setAllergies('')
     if (!keepContact) {
       setEmail('')
@@ -293,6 +301,7 @@ export function RsvpPage() {
         email: email.trim(),
         phone: phone.trim(),
         menuItemIds: asGroup ? [] : menuItemIds,
+        carteItemIds: asGroup ? [] : carteItemIds,
         allergies: asGroup ? '' : allergies.trim(),
         notes: notes.trim(),
         menuRequest: asGroup ? '' : menuRequest.trim(),
@@ -305,6 +314,7 @@ export function RsvpPage() {
               name: m.name.trim(),
               allergies: m.allergies.trim(),
               menuRequest: m.menuRequest.trim(),
+              carteItemIds: m.carteItemIds || [],
               ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
             }))
           : [],
@@ -316,9 +326,13 @@ export function RsvpPage() {
           }`
         : `${name.trim()} · ${
             ageGroup === 'child' ? t('ageChild') : t('ageAdult')
-          } · ${
-            menuLabel(menuItemIds, gathering.menu, t('noSelection'))
-          }${menuRequest.trim() ? ` · ${menuRequest.trim()}` : ''}`
+          } · ${personOrderLabel(
+            menuItemIds,
+            carteItemIds,
+            menuRequest,
+            gathering,
+            t('noSelection'),
+          )}`
 
       saveGuestPrefs({
         name: forSomeoneElse ? registeredBy.trim() : name.trim(),
@@ -639,14 +653,12 @@ export function RsvpPage() {
             <h2>{t('rsvpStepMenuTitle')}</h2>
             <p className="sub">{t('rsvpStepMenuSub')}</p>
 
-            {(gathering.menuCardUrl || gathering.menu.length > 0) && (
+            {(gathering.menuCardUrl ||
+              gathering.menu.length > 0 ||
+              (gathering.carteApproved && (gathering.carteItems || []).length > 0)) && (
               <div className="menu-peek-bar">
                 <p className="sub">{t('menuPeekHint')}</p>
-                <MenuSheet
-                  gathering={gathering}
-                  onOcrLines={setOcrLines}
-                  saveOcrLines={(lines) => setMenuOcr(gathering.id, lines)}
-                />
+                <MenuSheet gathering={gathering} />
               </div>
             )}
 
@@ -716,13 +728,20 @@ export function RsvpPage() {
                           />
                         </div>
                       )}
-                      {gathering.menuCardUrl && (
+                      {(gathering.menuCardUrl ||
+                        gathering.carteApproved ||
+                        gathering.menu.length === 0) && (
                         <MenuOrderField
-                          value={member.menuRequest}
-                          onChange={(value) =>
+                          carteItems={gathering.carteItems || []}
+                          carteApproved={Boolean(gathering.carteApproved)}
+                          selectedCarteIds={member.carteItemIds || []}
+                          onCarteChange={(ids) =>
+                            updateMember(member.id, { carteItemIds: ids })
+                          }
+                          menuRequest={member.menuRequest}
+                          onMenuRequestChange={(value) =>
                             updateMember(member.id, { menuRequest: value })
                           }
-                          ocrLines={ocrLines}
                           placeholder={t('menuRequestPlaceholder')}
                         />
                       )}
@@ -755,19 +774,26 @@ export function RsvpPage() {
                     />
                   </>
                 )}
-                {gathering.menuCardUrl && (
+                {(gathering.menuCardUrl ||
+                  gathering.carteApproved ||
+                  gathering.menu.length === 0) && (
                   <div style={{ marginTop: '0.85rem' }}>
                     <MenuOrderField
-                      value={menuRequest}
-                      onChange={setMenuRequest}
-                      ocrLines={ocrLines}
+                      carteItems={gathering.carteItems || []}
+                      carteApproved={Boolean(gathering.carteApproved)}
+                      selectedCarteIds={carteItemIds}
+                      onCarteChange={setCarteItemIds}
+                      menuRequest={menuRequest}
+                      onMenuRequestChange={setMenuRequest}
                       placeholder={t('menuRequestPlaceholder')}
                     />
                   </div>
                 )}
-                {gathering.menu.length === 0 && !gathering.menuCardUrl && (
-                  <div className="empty">{t('organizerNoMenu')}</div>
-                )}
+                {gathering.menu.length === 0 &&
+                  !gathering.menuCardUrl &&
+                  !(gathering.carteApproved && (gathering.carteItems || []).length) && (
+                    <div className="empty">{t('organizerNoMenu')}</div>
+                  )}
               </>
             )}
           </div>
@@ -804,8 +830,13 @@ export function RsvpPage() {
                       {' · '}
                       {m.ageGroup === 'child' ? t('ageChild') : t('ageAdult')}
                       {' · '}
-                      {menuLabel(m.menuItemIds, gathering.menu, t('noSelection'))}
-                      {m.menuRequest ? ` · ${m.menuRequest}` : ''}
+                      {personOrderLabel(
+                        m.menuItemIds,
+                        m.carteItemIds || [],
+                        m.menuRequest || '',
+                        gathering,
+                        t('noSelection'),
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -813,8 +844,13 @@ export function RsvpPage() {
                 <div className="rsvp-review-row">
                   <span>{t('pickFromMenu')}</span>
                   <strong>
-                    {menuLabel(menuItemIds, gathering.menu, t('noSelection'))}
-                    {menuRequest ? ` · ${menuRequest}` : ''}
+                    {personOrderLabel(
+                      menuItemIds,
+                      carteItemIds,
+                      menuRequest,
+                      gathering,
+                      t('noSelection'),
+                    )}
                   </strong>
                 </div>
               )}
@@ -889,15 +925,14 @@ export function RsvpPage() {
                 {formatMoney(estimated, gathering.currency, localeTag)}
                 {hasAlaCartePick ? '+' : ''}
               </strong>
-              {step === 'menu' && (gathering.menuCardUrl || gathering.menu.length > 0) && (
+              {step === 'menu' &&
+                (gathering.menuCardUrl ||
+                  gathering.menu.length > 0 ||
+                  (gathering.carteApproved &&
+                    (gathering.carteItems || []).length > 0)) && (
                 <>
                   {' · '}
-                  <MenuSheet
-                    gathering={gathering}
-                    compact
-                    onOcrLines={setOcrLines}
-                    saveOcrLines={(lines) => setMenuOcr(gathering.id, lines)}
-                  />
+                  <MenuSheet gathering={gathering} compact />
                 </>
               )}
             </p>

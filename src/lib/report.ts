@@ -3,8 +3,8 @@ import {
   formatDate,
   formatMoney,
   gatheringTotals,
-  menuLabel,
   normalizeAgeGroup,
+  personOrderLabel,
 } from './money'
 
 export type ReportPerson = {
@@ -21,13 +21,20 @@ export type ReportPerson = {
 }
 
 function personFromSolo(a: Attendee, gathering: Gathering): ReportPerson {
+  const cartePart = personOrderLabel(
+    [],
+    a.carteItemIds || [],
+    a.menuRequest || '',
+    gathering,
+    '',
+  )
   return {
     id: a.id,
     name: a.name,
     ageGroup: normalizeAgeGroup(a.ageGroup),
     party: a.name,
-    menu: menuLabel(a.menuItemIds, gathering.menu, '—'),
-    menuRequest: (a.menuRequest || '').trim(),
+    menu: personOrderLabel(a.menuItemIds, [], '', gathering, '—'),
+    menuRequest: cartePart || '—',
     allergies: (a.allergies || '').trim(),
     email: (a.email || '').trim(),
     phone: (a.phone || '').trim(),
@@ -40,13 +47,20 @@ function personFromMember(
   m: GroupMember,
   gathering: Gathering,
 ): ReportPerson {
+  const cartePart = personOrderLabel(
+    [],
+    m.carteItemIds || [],
+    m.menuRequest || '',
+    gathering,
+    '',
+  )
   return {
     id: `${a.id}-${m.id}`,
     name: m.name,
     ageGroup: normalizeAgeGroup(m.ageGroup),
     party: a.name,
-    menu: menuLabel(m.menuItemIds, gathering.menu, '—'),
-    menuRequest: (m.menuRequest || '').trim(),
+    menu: personOrderLabel(m.menuItemIds, [], '', gathering, '—'),
+    menuRequest: cartePart || '—',
     allergies: (m.allergies || '').trim(),
     email: (a.email || '').trim(),
     phone: (a.phone || '').trim(),

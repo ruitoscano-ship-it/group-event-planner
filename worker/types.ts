@@ -9,10 +9,16 @@ export type MenuItem = {
   isAlaCarte: boolean
 }
 
+export type CarteItem = {
+  id: string
+  name: string
+}
+
 export type GroupMember = {
   id: string
   name: string
   menuItemIds: string[]
+  carteItemIds: string[]
   allergies: string
   menuRequest: string
   ageGroup: AgeGroup
@@ -25,6 +31,7 @@ export type Attendee = {
   email: string
   phone: string
   menuItemIds: string[]
+  carteItemIds: string[]
   allergies: string
   notes: string
   menuRequest: string
@@ -59,7 +66,8 @@ export type Gathering = {
   organizerEmail: string
   organizerPhone: string
   menuCardUrl: string
-  menuOcrLines: string[]
+  carteItems: CarteItem[]
+  carteApproved: boolean
   menu: MenuItem[]
   attendees: Attendee[]
   messages: InboxMessage[]

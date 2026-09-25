@@ -1,59 +1,49 @@
 import { useI18n } from '../i18n/I18nContext'
+import type { CarteItem } from '../types'
+import { CartePicker } from './CartePicker'
 
 type Props = {
-  value: string
-  onChange: (value: string) => void
-  ocrLines: string[]
+  carteItems: CarteItem[]
+  carteApproved: boolean
+  selectedCarteIds: string[]
+  onCarteChange: (ids: string[]) => void
+  menuRequest: string
+  onMenuRequestChange: (value: string) => void
   placeholder?: string
 }
 
 export function MenuOrderField({
-  value,
-  onChange,
-  ocrLines,
+  carteItems,
+  carteApproved,
+  selectedCarteIds,
+  onCarteChange,
+  menuRequest,
+  onMenuRequestChange,
   placeholder,
 }: Props) {
   const { t } = useI18n()
-
-  function addFromDropdown(line: string) {
-    if (!line) return
-    const current = value.trim()
-    if (!current) {
-      onChange(line)
-      return
-    }
-    if (current.toLowerCase().includes(line.toLowerCase())) return
-    onChange(`${current}, ${line}`)
-  }
+  const showCarte = carteApproved && carteItems.length > 0
 
   return (
     <div className="menu-order-field">
-      {ocrLines.length > 0 && (
-        <label className="menu-order-select-label">
-          {t('ocrPickFromMenu')}
-          <select
-            className="menu-order-select"
-            defaultValue=""
-            onChange={(e) => {
-              addFromDropdown(e.target.value)
-              e.target.value = ''
-            }}
-          >
-            <option value="">{t('ocrPickPlaceholder')}</option>
-            {ocrLines.map((line) => (
-              <option key={line} value={line}>
-                {line}
-              </option>
-            ))}
-          </select>
-        </label>
+      {showCarte ? (
+        <CartePicker
+          items={carteItems}
+          selectedIds={selectedCarteIds}
+          onChange={onCarteChange}
+        />
+      ) : (
+        <p className="sub">{t('carteNotReady')}</p>
       )}
       <label>
-        {t('menuRequest')}
+        {showCarte ? t('menuRequestExtras') : t('menuRequest')}
         <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder || t('menuRequestPlaceholder')}
+          value={menuRequest}
+          onChange={(e) => onMenuRequestChange(e.target.value)}
+          placeholder={
+            placeholder ||
+            (showCarte ? t('menuRequestExtrasPlaceholder') : t('menuRequestPlaceholder'))
+          }
           rows={3}
         />
       </label>

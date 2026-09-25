@@ -14,7 +14,14 @@ import {
   rememberGatheringId,
   saveKnownIds,
 } from '../lib/knownIds'
-import type { Attendee, Gathering, GatheringInput, MenuItem, MessageInput } from '../types'
+import type {
+  Attendee,
+  CarteItem,
+  Gathering,
+  GatheringInput,
+  MenuItem,
+  MessageInput,
+} from '../types'
 
 type Store = {
   gatherings: Gathering[]
@@ -27,7 +34,11 @@ type Store = {
   deleteGathering: (id: string) => Promise<void>
   addMenuItem: (gatheringId: string, item: Omit<MenuItem, 'id'>) => Promise<void>
   setMenuCard: (gatheringId: string, menuCardUrl: string) => Promise<void>
-  setMenuOcr: (gatheringId: string, lines: string[]) => Promise<void>
+  setMenuCarte: (
+    gatheringId: string,
+    items: CarteItem[],
+    approved: boolean,
+  ) => Promise<void>
   removeMenuItem: (gatheringId: string, itemId: string) => Promise<void>
   addAttendee: (
     gatheringId: string,
@@ -133,10 +144,13 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
     setGatherings((prev) => upsert(prev, next))
   }, [])
 
-  const setMenuOcr = useCallback(async (gatheringId: string, lines: string[]) => {
-    const next = await api.setMenuOcr(gatheringId, lines)
-    setGatherings((prev) => upsert(prev, next))
-  }, [])
+  const setMenuCarte = useCallback(
+    async (gatheringId: string, items: CarteItem[], approved: boolean) => {
+      const next = await api.setMenuCarte(gatheringId, items, approved)
+      setGatherings((prev) => upsert(prev, next))
+    },
+    [],
+  )
 
   const removeMenuItem = useCallback(async (gatheringId: string, itemId: string) => {
     const next = await api.removeMenuItem(gatheringId, itemId)
@@ -204,7 +218,7 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       deleteGathering,
       addMenuItem,
       setMenuCard,
-      setMenuOcr,
+      setMenuCarte,
       removeMenuItem,
       addAttendee,
       updateAttendee,
@@ -225,7 +239,7 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       deleteGathering,
       addMenuItem,
       setMenuCard,
-      setMenuOcr,
+      setMenuCarte,
       removeMenuItem,
       addAttendee,
       updateAttendee,

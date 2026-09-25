@@ -1,5 +1,6 @@
 import type {
   Attendee,
+  CarteItem,
   Gathering,
   GatheringInput,
   MenuItem,
@@ -66,10 +67,14 @@ export const api = {
       { method: 'PUT', body: JSON.stringify({ menuCardUrl }) },
     )
   },
-  setMenuOcr(gatheringId: string, lines: string[]) {
+  setMenuCarte(
+    gatheringId: string,
+    items: CarteItem[],
+    approved: boolean,
+  ) {
     return request<Gathering>(
-      `/api/gatherings/${encodeURIComponent(gatheringId)}/menu-ocr`,
-      { method: 'PUT', body: JSON.stringify({ lines }) },
+      `/api/gatherings/${encodeURIComponent(gatheringId)}/menu-carte`,
+      { method: 'PUT', body: JSON.stringify({ items, approved }) },
     )
   },
   removeMenuItem(gatheringId: string, itemId: string) {
