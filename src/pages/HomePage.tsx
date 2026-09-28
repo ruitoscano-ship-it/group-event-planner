@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import { CreateEventChat } from '../components/CreateEventChat'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { useI18n } from '../i18n/I18nContext'
-import { shouldUseAssistedMode } from '../lib/assistedMode'
 import { formatOrganizerCode } from '../lib/organizerAccess'
 import { useGatherings } from '../store/GatheringsContext'
 import type { GatheringInput } from '../types'
@@ -27,10 +26,8 @@ export function HomePage() {
   }
 
   async function handleCreate(input: GatheringInput) {
-    const guideAfterCreate = shouldUseAssistedMode()
     const created = await createGathering(input)
-    const q = guideAfterCreate ? 'created=1&assisted=1' : 'created=1'
-    navigate(`/events/${created.gathering.id}?${q}`, { viewTransition: true })
+    navigate(`/events/${created.gathering.id}?created=1`, { viewTransition: true })
   }
 
   async function onAccess(e: FormEvent) {

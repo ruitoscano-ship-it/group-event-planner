@@ -233,56 +233,8 @@ body[data-demo-open='1'] .rsvp-sticky {
   gap: 0.5rem;
   flex-wrap: wrap;
   align-items: center;
-}
-
-.nav-actions-desktop {
-  display: contents;
-}
-
-.topbar-more {
-  display: none;
-}
-
-.topbar-more > summary {
-  list-style: none;
-  cursor: pointer;
-  min-height: 44px;
-  min-width: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.45rem 0.85rem;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: #fff;
-  color: var(--ink-soft);
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.topbar-more > summary::-webkit-details-marker {
-  display: none;
-}
-
-.topbar-more-panel {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 0.4rem);
-  z-index: 30;
-  display: grid;
-  gap: 0.4rem;
-  min-width: 11.5rem;
-  padding: 0.55rem;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background: #fff;
-  box-shadow: 0 14px 32px rgba(6, 40, 35, 0.14);
-}
-
-.topbar-more-panel .btn {
-  width: 100%;
-  justify-content: center;
+  justify-content: flex-end;
+  max-width: min(100%, 22rem);
 }
 
 .lang-switch {
@@ -2015,17 +1967,19 @@ textarea {
 
   .topbar {
     border-radius: 20px;
-    align-items: flex-start;
-    gap: 0.65rem;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
   }
 
-  .nav-actions-desktop {
+  .nav-actions {
+    max-width: none;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+
+  .topbar-secondary {
     display: none;
-  }
-
-  .topbar-more {
-    display: block;
-    position: relative;
   }
 
   .rsvp-steps {
