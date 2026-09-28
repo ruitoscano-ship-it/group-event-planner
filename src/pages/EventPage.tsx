@@ -40,7 +40,11 @@ import {
   menuItemSavedKeys,
   pickFeedback,
 } from '../lib/feedback'
-import { markAssistedComplete } from '../lib/assistedMode'
+import {
+  markAssistedComplete,
+  resetAssistedMode,
+  shouldAutoStartOrganizerDemo,
+} from '../lib/assistedMode'
 import { useGatherings } from '../store/GatheringsContext'
 import type { AgeGroup, GroupMember } from '../types'
 
@@ -87,8 +91,8 @@ export function EventPage() {
   const [codeError, setCodeError] = useState(false)
   const justCreated = searchParams.get('created') === '1'
   const assistedTour = searchParams.get('assisted') === '1'
-  const [coachStep, setCoachStep] = useState<CoachStep | null>(
-    assistedTour ? 'code' : null,
+  const [coachStep, setCoachStep] = useState<CoachStep | null>(() =>
+    assistedTour || justCreated || shouldAutoStartOrganizerDemo() ? 'code' : null,
   )
   const [simpleMode, setSimpleMode] = useState(true)
   const [showGuestForm, setShowGuestForm] = useState(false)
@@ -618,6 +622,29 @@ export function EventPage() {
         </Link>
         <div className="nav-actions">
           <LanguageSwitcher />
+          {canManage && (
+            <button
+              className={`btn btn-sm ${coachStep ? 'btn-accent' : 'btn-ghost'}`}
+              type="button"
+              onClick={() => {
+                if (coachStep) {
+                  markAssistedComplete()
+                  setCoachStep(null)
+                  setSearchParams({}, { replace: true })
+                  return
+                }
+                resetAssistedMode()
+                setCoachStep('code')
+                setSimpleMode(true)
+                setTab('menu')
+                window.setTimeout(() => {
+                  codePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }, 50)
+              }}
+            >
+              {coachStep ? t('demoExit') : t('demoStart')}
+            </button>
+          )}
           {!guided && (
             <button
               className="btn btn-ghost btn-sm"
@@ -678,6 +705,9 @@ export function EventPage() {
           className={`event-stage-share ${coachStep === 'share' || coachStep === 'code' ? 'coach-target' : ''}`}
           ref={shareBoxRef}
         >
+          {(coachStep === 'share' || coachStep === 'code') && (
+            <p className="demo-inline-tip">{t('demoTipShare')}</p>
+          )}
           <div className="event-stage-share-label">
             <strong>{t('selfServiceLink')}</strong>
             <code>{rsvpUrl}</code>
@@ -874,6 +904,9 @@ export function EventPage() {
           }`}
           style={{ marginBottom: '1rem' }}
         >
+          {coachStep === 'code' && (
+            <p className="demo-inline-tip">{t('demoTipCode')}</p>
+          )}
           <h2>{t('organizerCodeTitle')}</h2>
           <p className="sub">
             {justCreated ? t('organizerCodeNewSub') : t('organizerCodeSub')}
@@ -965,6 +998,9 @@ export function EventPage() {
 
       {showTabs && (
         <>
+      {coachStep === 'menu' && (
+        <p className="demo-inline-tip">{t('demoTipMenu')}</p>
+      )}
       <div className={`tabs ${coachStep === 'menu' ? 'coach-target' : ''}`}>
         {tabOptions.map(([key, label]) => (
           <button
@@ -1679,18 +1715,9 @@ export function EventPage() {
       {coachStep && canManage && (
         <FirstEventCoach
           step={coachStep}
-          onStep={(next) => {
-            setCoachStep(next)
-            if (next === 'code') {
-              codePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            }
-            if (next === 'menu') {
-              setTab('menu')
-              window.scrollTo({ top: 0, behavior: 'smooth' })
-            }
-            if (next === 'share') {
-              shareBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            }
+          onStep={setCoachStep}
+          onGoCode={() => {
+            codePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
           }}
           onGoMenu={() => {
             setTab('menu')

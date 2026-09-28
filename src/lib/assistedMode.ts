@@ -12,16 +12,35 @@ function hasOrganizerHistory(): boolean {
   }
 }
 
-/** True when this browser has never managed an event — launch assisted mode. */
+export function isAssistedComplete(): boolean {
+  if (typeof localStorage === 'undefined') return false
+  return localStorage.getItem(ASSISTED_DONE_KEY) === '1'
+}
+
+/** True when this browser has never finished the organizer demo. */
 export function shouldUseAssistedMode(): boolean {
   if (typeof localStorage === 'undefined') return false
-  if (localStorage.getItem(ASSISTED_DONE_KEY) === '1') return false
+  if (isAssistedComplete()) return false
   return !hasOrganizerHistory()
+}
+
+/** Start demo for first-time organizers even after they already have a code saved. */
+export function shouldAutoStartOrganizerDemo(): boolean {
+  if (typeof localStorage === 'undefined') return false
+  return !isAssistedComplete()
 }
 
 export function markAssistedComplete(): void {
   try {
     localStorage.setItem(ASSISTED_DONE_KEY, '1')
+  } catch {
+    // ignore
+  }
+}
+
+export function resetAssistedMode(): void {
+  try {
+    localStorage.removeItem(ASSISTED_DONE_KEY)
   } catch {
     // ignore
   }
