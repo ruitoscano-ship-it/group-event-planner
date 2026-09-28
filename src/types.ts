@@ -80,6 +80,8 @@ export type Gathering = {
   organizerEmail: string
   organizerPhone: string
   menuCardUrl: string
+  /** Google-linked owner when the organizer signed in. */
+  ownerUserId?: string | null
   /** Editable event carte (organizer-managed, often from OCR) */
   carteItems: CarteItem[]
   /** When true, invitees can multi-pick from the carte */
@@ -90,6 +92,13 @@ export type Gathering = {
   createdAt: string
   /** ISO timestamp when admin archived the event */
   archivedAt?: string | null
+}
+
+export type OrganizerAccount = {
+  id: string
+  email: string
+  name: string
+  pictureUrl: string
 }
 
 /** Returned only from create / unlock — includes the manage code. */

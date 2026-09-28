@@ -6,25 +6,28 @@ import { EventPage } from './pages/EventPage'
 import { HomePage } from './pages/HomePage'
 import { RsvpPage } from './pages/RsvpPage'
 import { GatheringsProvider } from './store/GatheringsContext'
+import { OrganizerAuthProvider } from './store/OrganizerAuthContext'
 
 export default function App() {
   return (
     <I18nProvider>
-      <GatheringsProvider>
-        <BrowserRouter>
-          <div className="app-shell">
-            <Routes>
-              <Route element={<PageLayout />}>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/admin" element={<AdminPage />} />
-                <Route path="/events/:eventId" element={<EventPage />} />
-                <Route path="/rsvp/:eventId" element={<RsvpPage />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Route>
-            </Routes>
-          </div>
-        </BrowserRouter>
-      </GatheringsProvider>
+      <OrganizerAuthProvider>
+        <GatheringsProvider>
+          <BrowserRouter>
+            <div className="app-shell">
+              <Routes>
+                <Route element={<PageLayout />}>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/admin" element={<AdminPage />} />
+                  <Route path="/events/:eventId" element={<EventPage />} />
+                  <Route path="/rsvp/:eventId" element={<RsvpPage />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Route>
+              </Routes>
+            </div>
+          </BrowserRouter>
+        </GatheringsProvider>
+      </OrganizerAuthProvider>
     </I18nProvider>
   )
 }

@@ -24,6 +24,7 @@ async function request<T>(
   const res = await fetch(path, {
     ...rest,
     headers,
+    credentials: 'include',
   })
   if (!res.ok) {
     let message = `Request failed (${res.status})`
@@ -67,16 +68,25 @@ export const api = {
       body: JSON.stringify(input),
     })
   },
-  accessByCode(code: string) {
-    return request<GatheringAccess>('/api/access', {
-      method: 'POST',
-      body: JSON.stringify({ code }),
-    })
-  },
   unlockGathering(gatheringId: string, code: string) {
-    return request<GatheringAccess>(
+    return request<GatheringAccess & { claimed?: boolean }>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/unlock`,
       { method: 'POST', body: JSON.stringify({ code }) },
+    )
+  },
+  claimGathering(gatheringId: string, code: string) {
+    return request<GatheringAccess & { claimed: boolean }>(
+      `/api/gatherings/${encodeURIComponent(gatheringId)}/claim`,
+      { method: 'POST', body: JSON.stringify({ code }) },
+    )
+  },
+  accessByCode(code: string) {
+    return request<GatheringAccess & { claimed?: boolean; claimable?: boolean }>(
+      '/api/access',
+      {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      },
     )
   },
   updateOrganizerCode(gatheringId: string, code: string) {

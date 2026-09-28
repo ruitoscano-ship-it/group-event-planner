@@ -73,6 +73,8 @@ export type Gathering = {
   organizerPhone: string
   /** Secret code that unlocks organizer manage access. Never sent on public GETs. */
   organizerCode: string
+  /** Google-linked owner; optional for legacy / code-only events. */
+  ownerUserId?: string | null
   menuCardUrl: string
   carteItems: CarteItem[]
   carteApproved: boolean
@@ -109,4 +111,8 @@ export type Env = {
   DB: D1Database
   /** Set via `wrangler secret put ADMIN_PASSWORD` (min 8 chars). */
   ADMIN_PASSWORD?: string
+  GOOGLE_CLIENT_ID?: string
+  GOOGLE_CLIENT_SECRET?: string
+  /** HMAC secret for organizer session cookies (min 16 chars). */
+  ORGANIZER_SESSION_SECRET?: string
 }

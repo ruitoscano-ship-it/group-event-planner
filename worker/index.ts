@@ -14,6 +14,19 @@ import {
   verifyAdminPassword,
   verifyAdminToken,
 } from './adminAuth'
+import {
+  buildGoogleAuthUrl,
+  clearOAuthStateCookie,
+  clearSessionCookie,
+  exchangeGoogleCode,
+  getSessionUser,
+  googleAuthConfigured,
+  mintOAuthStateForRequest,
+  mintSessionCookie,
+  publicUser,
+  upsertGoogleUser,
+  verifyOAuthState,
+} from './organizerAuth'
 
 const SECURITY_HEADERS: Record<string, string> = {
   'Content-Type': 'application/json',
@@ -145,7 +158,7 @@ function readOrganizerCodeHeader(request: Request): string {
   return normalizeOrganizerCode(request.headers.get('X-Organizer-Code') || '')
 }
 
-function isOrganizerAuthorized(request: Request, gathering: Gathering): boolean {
+function isOrganizerCodeAuthorized(request: Request, gathering: Gathering): boolean {
   const stored = normalizeOrganizerCode(gathering.organizerCode || '')
   // No code on record: not authorized until unlock assigns one
   if (!stored) return false
@@ -153,10 +166,27 @@ function isOrganizerAuthorized(request: Request, gathering: Gathering): boolean 
   return Boolean(provided) && provided === stored
 }
 
-function requireOrganizer(request: Request, gathering: Gathering): Response | null {
-  if (isOrganizerAuthorized(request, gathering)) return null
-  return error('Organizer code required', 401)
+async function canManageOrganizer(
+  request: Request,
+  env: Env,
+  gathering: Gathering,
+): Promise<boolean> {
+  if (isOrganizerCodeAuthorized(request, gathering)) return true
+  const ownerId = gathering.ownerUserId || ''
+  if (!ownerId) return false
+  const user = await getSessionUser(env, request)
+  return Boolean(user && user.id === ownerId)
 }
+
+async function requireOrganizer(
+  request: Request,
+  env: Env,
+  gathering: Gathering,
+): Promise<Response | null> {
+  if (await canManageOrganizer(request, env, gathering)) return null
+  return error('Organizer access required', 401)
+}
+
 
 type PublicAttendee = Pick<
   Attendee,
@@ -196,13 +226,13 @@ function toPublicAttendees(attendees: Attendee[]): PublicAttendee[] {
 function toClientGathering(
   gathering: Gathering,
   authorized: boolean,
-): Omit<Gathering, 'organizerCode'> & { organizerCode?: undefined } {
-  const { organizerCode: _code, ...rest } = gathering
+): Omit<Gathering, 'organizerCode'> & { organizerCode?: string } {
+  const { organizerCode: rawCode, ...rest } = gathering
   if (authorized) {
     return {
       ...rest,
-      // Never echo the manage code in JSON bodies
-      organizerCode: undefined,
+      // Only for authorized manage sessions (code header or Google owner)
+      organizerCode: formatOrganizerCode(rawCode),
     }
   }
   return {
@@ -236,6 +266,7 @@ function normalizeGathering(raw: Gathering & { menuOcrLines?: string[] }): Gathe
     notes: clip(raw.notes, MAX_NOTES),
     menuCardUrl: raw.menuCardUrl || '',
     organizerCode: formatOrganizerCode(raw.organizerCode || '') || '',
+    ownerUserId: raw.ownerUserId || null,
     carteItems,
     carteApproved: Boolean(raw.carteApproved) && carteItems.length > 0,
     organizerName: clip(raw.organizerName, MAX_NAME),
@@ -346,19 +377,27 @@ async function writeGathering(db: D1Database, gathering: Gathering, isNew: boole
     throw new Error('Gathering payload too large')
   }
   const archivedAt = normalized.archivedAt || null
+  const ownerUserId = normalized.ownerUserId || null
   if (isNew) {
     await db
       .prepare(
-        'INSERT INTO gatherings (id, data, created_at, updated_at, archived_at) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO gatherings (id, data, created_at, updated_at, archived_at, owner_user_id) VALUES (?, ?, ?, ?, ?, ?)',
       )
-      .bind(normalized.id, payload, normalized.createdAt || now, now, archivedAt)
+      .bind(
+        normalized.id,
+        payload,
+        normalized.createdAt || now,
+        now,
+        archivedAt,
+        ownerUserId,
+      )
       .run()
   } else {
     await db
       .prepare(
-        'UPDATE gatherings SET data = ?, updated_at = ?, archived_at = ? WHERE id = ?',
+        'UPDATE gatherings SET data = ?, updated_at = ?, archived_at = ?, owner_user_id = ? WHERE id = ?',
       )
-      .bind(payload, now, archivedAt, normalized.id)
+      .bind(payload, now, archivedAt, ownerUserId, normalized.id)
       .run()
   }
 }
@@ -558,6 +597,136 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     return json({ ok: true })
   }
 
+  // ——— Organizer Google auth ———
+  if (path === '/api/auth/google/start' && method === 'GET') {
+    if (!googleAuthConfigured(env)) {
+      return error(
+        'Google sign-in is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and ORGANIZER_SESSION_SECRET.',
+        503,
+      )
+    }
+    const { state, setCookieHeader } = await mintOAuthStateForRequest(env, request)
+    const location = buildGoogleAuthUrl(env, request, state)
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: location,
+        'Set-Cookie': setCookieHeader,
+        'Cache-Control': 'no-store',
+      },
+    })
+  }
+
+  if (path === '/api/auth/google/callback' && method === 'GET') {
+    const home = `${new URL(request.url).origin}/`
+    const fail = (msg: string) =>
+      new Response(null, {
+        status: 302,
+        headers: {
+          Location: `${home}?authError=${encodeURIComponent(msg)}`,
+          'Set-Cookie': clearOAuthStateCookie(request),
+          'Cache-Control': 'no-store',
+        },
+      })
+    if (!googleAuthConfigured(env)) {
+      return fail('Google sign-in is not configured')
+    }
+    const errParam = url.searchParams.get('error')
+    if (errParam) return fail('Google sign-in was cancelled')
+    const code = url.searchParams.get('code') || ''
+    const state = url.searchParams.get('state') || ''
+    if (!code || !(await verifyOAuthState(env, request, state))) {
+      return fail('Invalid sign-in state. Try again.')
+    }
+    try {
+      const profile = await exchangeGoogleCode(env, request, code)
+      const user = await upsertGoogleUser(env.DB, profile)
+      const session = await mintSessionCookie(env, request, user.id)
+      const headers = new Headers({
+        Location: `${home}?signedIn=1`,
+        'Cache-Control': 'no-store',
+      })
+      headers.append('Set-Cookie', session.setCookieHeader)
+      headers.append('Set-Cookie', clearOAuthStateCookie(request))
+      return new Response(null, { status: 302, headers })
+    } catch (err) {
+      console.error('Google OAuth callback failed', err)
+      return fail('Could not complete Google sign-in')
+    }
+  }
+
+  if (path === '/api/auth/logout' && method === 'POST') {
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: {
+        ...SECURITY_HEADERS,
+        'Set-Cookie': clearSessionCookie(request),
+      },
+    })
+  }
+
+  if (path === '/api/auth/status' && method === 'GET') {
+    return json({ configured: googleAuthConfigured(env) })
+  }
+
+  if (path === '/api/me' && method === 'GET') {
+    const user = await getSessionUser(env, request)
+    if (!user) return error('Not signed in', 401)
+    return json({ user: publicUser(user) })
+  }
+
+  if (path === '/api/me/gatherings' && method === 'GET') {
+    const user = await getSessionUser(env, request)
+    if (!user) return error('Not signed in', 401)
+    const { results } = await env.DB.prepare(
+      'SELECT data FROM gatherings WHERE owner_user_id = ? ORDER BY updated_at DESC LIMIT 100',
+    )
+      .bind(user.id)
+      .all<{ data: string }>()
+    const gatherings = (results ?? [])
+      .map((row) => {
+        try {
+          const gathering = normalizeGathering(JSON.parse(row.data) as Gathering)
+          gathering.ownerUserId = user.id
+          return toClientGathering(gathering, true)
+        } catch {
+          return null
+        }
+      })
+      .filter((g): g is ReturnType<typeof toClientGathering> => g !== null)
+    return json(gatherings)
+  }
+
+  const claimMatch = path.match(/^\/api\/gatherings\/([^/]+)\/claim$/)
+  if (claimMatch && method === 'POST') {
+    const limited = rateLimit(request, 'claim', 20, 60_000)
+    if (limited) return limited
+    const user = await getSessionUser(env, request)
+    if (!user) return error('Sign in to claim an event', 401)
+    const id = decodeURIComponent(claimMatch[1])
+    const gathering = await readGathering(env.DB, id)
+    if (!gathering) return error('Gathering not found', 404)
+    const bodyOrErr = await readJsonBody<{ code?: string }>(request)
+    if (bodyOrErr instanceof Response) return bodyOrErr
+    const code = normalizeOrganizerCode(bodyOrErr.code || '')
+    if (
+      !code ||
+      code !== normalizeOrganizerCode(gathering.organizerCode || '')
+    ) {
+      return error('Invalid organizer code', 401)
+    }
+    if (gathering.ownerUserId && gathering.ownerUserId !== user.id) {
+      return error('This event is already linked to another account', 409)
+    }
+    gathering.ownerUserId = user.id
+    await writeGathering(env.DB, gathering, false)
+    return json({
+      gathering: toClientGathering(gathering, true),
+      organizerCode: formatOrganizerCode(gathering.organizerCode),
+      claimed: true,
+    })
+  }
+
   if (path === '/api/gatherings' && method === 'GET') {
     const idsParam = url.searchParams.get('ids')
     if (!idsParam) return json([])
@@ -600,9 +769,27 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (code.length < 6) return error('Organizer code is required')
     const gathering = await findGatheringByOrganizerCode(env.DB, code)
     if (!gathering) return error('No event found for that code', 404)
+    const sessionUser = await getSessionUser(env, request)
+    let claimed = false
+    if (sessionUser) {
+      if (!gathering.ownerUserId) {
+        gathering.ownerUserId = sessionUser.id
+        await writeGathering(env.DB, gathering, false)
+        claimed = true
+      } else if (gathering.ownerUserId === sessionUser.id) {
+        claimed = true
+      }
+    }
     return json({
       gathering: toClientGathering(gathering, true),
       organizerCode: formatOrganizerCode(gathering.organizerCode),
+      claimed,
+      claimable:
+        Boolean(sessionUser) &&
+        Boolean(gathering.ownerUserId) &&
+        gathering.ownerUserId !== sessionUser?.id
+          ? false
+          : Boolean(sessionUser) && !gathering.ownerUserId,
     })
   }
 
@@ -619,6 +806,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 
     const now = new Date().toISOString()
     const organizerCode = generateOrganizerCode()
+    const sessionUser = await getSessionUser(env, request)
     const gathering: Gathering = {
       id: newId('evt'),
       title: clip(body.title, MAX_NAME),
@@ -628,10 +816,11 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       location: clip(body.location, MAX_TEXT),
       notes: clip(body.notes, MAX_NOTES),
       currency: clip(body.currency, 8) || 'EUR',
-      organizerName: clip(body.organizerName, MAX_NAME),
-      organizerEmail: clip(body.organizerEmail, MAX_TEXT),
+      organizerName: clip(body.organizerName, MAX_NAME) || sessionUser?.name || '',
+      organizerEmail: clip(body.organizerEmail, MAX_TEXT) || sessionUser?.email || '',
       organizerPhone: clip(body.organizerPhone, 40),
       organizerCode,
+      ownerUserId: sessionUser?.id || null,
       menuCardUrl: card,
       carteItems: [],
       carteApproved: false,
@@ -657,17 +846,17 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (method === 'GET') {
       const gathering = await readGathering(env.DB, id)
       if (!gathering) return error('Gathering not found', 404)
-      if (gathering.archivedAt && !isOrganizerAuthorized(request, gathering)) {
+      const authorized = await canManageOrganizer(request, env, gathering)
+      if (gathering.archivedAt && !authorized) {
         return error('Gathering not found', 404)
       }
-      const authorized = isOrganizerAuthorized(request, gathering)
       return json(toClientGathering(gathering, authorized))
     }
 
     if (method === 'PUT') {
       const existing = await readGathering(env.DB, id)
       if (!existing) return error('Gathering not found', 404)
-      const denied = requireOrganizer(request, existing)
+      const denied = await requireOrganizer(request, env, existing)
       if (denied) return denied
       const bodyOrErr = await readJsonBody<Partial<Gathering>>(request)
       if (bodyOrErr instanceof Response) return bodyOrErr
@@ -709,6 +898,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
             : existing.organizerPhone,
         menuCardUrl: card,
         organizerCode: existing.organizerCode,
+        ownerUserId: existing.ownerUserId || null,
         menu: existing.menu,
         carteItems: existing.carteItems,
         carteApproved: existing.carteApproved,
@@ -723,7 +913,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (method === 'DELETE') {
       const existing = await readGathering(env.DB, id)
       if (!existing) return error('Gathering not found', 404)
-      const denied = requireOrganizer(request, existing)
+      const denied = await requireOrganizer(request, env, existing)
       if (denied) return denied
       const result = await env.DB.prepare('DELETE FROM gatherings WHERE id = ?')
         .bind(id)
@@ -756,9 +946,19 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (!code || code !== normalizeOrganizerCode(gathering.organizerCode)) {
       return error('Invalid organizer code', 401)
     }
+    const sessionUser = await getSessionUser(env, request)
+    let claimed = false
+    if (sessionUser && !gathering.ownerUserId) {
+      gathering.ownerUserId = sessionUser.id
+      await writeGathering(env.DB, gathering, false)
+      claimed = true
+    } else if (sessionUser && gathering.ownerUserId === sessionUser.id) {
+      claimed = true
+    }
     return json({
       gathering: toClientGathering(gathering, true),
       organizerCode: formatOrganizerCode(gathering.organizerCode),
+      claimed,
     })
   }
 
@@ -769,7 +969,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const id = decodeURIComponent(organizerCodeMatch[1])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
-    const denied = requireOrganizer(request, gathering)
+    const denied = await requireOrganizer(request, env, gathering)
     if (denied) return denied
     const bodyOrErr = await readJsonBody<{ code?: string }>(request)
     if (bodyOrErr instanceof Response) return bodyOrErr
@@ -794,7 +994,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const id = decodeURIComponent(menuCardMatch[1])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
-    const denied = requireOrganizer(request, gathering)
+    const denied = await requireOrganizer(request, env, gathering)
     if (denied) return denied
     const bodyOrErr = await readJsonBody<{ menuCardUrl?: string }>(request)
     if (bodyOrErr instanceof Response) return bodyOrErr
@@ -816,7 +1016,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const id = decodeURIComponent(menuCarteMatch[1])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
-    const denied = requireOrganizer(request, gathering)
+    const denied = await requireOrganizer(request, env, gathering)
     if (denied) return denied
     const bodyOrErr = await readJsonBody<{
       items?: unknown
@@ -849,7 +1049,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const id = decodeURIComponent(menuMatch[1])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
-    const denied = requireOrganizer(request, gathering)
+    const denied = await requireOrganizer(request, env, gathering)
     if (denied) return denied
     if (gathering.menu.length >= MAX_MENU_ITEMS) {
       return error('Menu item limit reached')
@@ -879,7 +1079,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const itemId = decodeURIComponent(menuItemMatch[2])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
-    const denied = requireOrganizer(request, gathering)
+    const denied = await requireOrganizer(request, env, gathering)
     if (denied) return denied
     gathering.menu = gathering.menu.filter((m) => m.id !== itemId)
     gathering.attendees = gathering.attendees.map((a) => ({
@@ -902,7 +1102,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
     if (gathering.archivedAt) return error('This event is archived', 410)
-    const asOrganizer = isOrganizerAuthorized(request, gathering)
+    const asOrganizer = await canManageOrganizer(request, env, gathering)
     const bodyOrErr = await readJsonBody<
       Omit<Attendee, 'id' | 'createdAt' | 'amountPaid' | 'guestKey'> & {
         amountPaid?: number
@@ -1033,7 +1233,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (!gathering) return error('Gathering not found', 404)
 
     if (method === 'PATCH') {
-      const denied = requireOrganizer(request, gathering)
+      const denied = await requireOrganizer(request, env, gathering)
       if (denied) return denied
       const bodyOrErr = await readJsonBody<Partial<Attendee>>(request)
       if (bodyOrErr instanceof Response) return bodyOrErr
@@ -1129,7 +1329,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     }
 
     if (method === 'DELETE') {
-      const denied = requireOrganizer(request, gathering)
+      const denied = await requireOrganizer(request, env, gathering)
       if (denied) return denied
       gathering.attendees = gathering.attendees.filter((a) => a.id !== attendeeId)
       await writeGathering(env.DB, gathering, false)
@@ -1171,7 +1371,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const messageId = decodeURIComponent(messageMatch[2])
     const gathering = await readGathering(env.DB, id)
     if (!gathering) return error('Gathering not found', 404)
-    const denied = requireOrganizer(request, gathering)
+    const denied = await requireOrganizer(request, env, gathering)
     if (denied) return denied
     const idx = (gathering.messages || []).findIndex((m) => m.id === messageId)
     if (idx === -1) return error('Message not found', 404)

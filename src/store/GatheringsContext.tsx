@@ -119,9 +119,11 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
       const hydrated = await Promise.all(
         list.map(async (g) => {
           const code = loadOrganizerCode(g.id)
-          if (!code) return g
           try {
-            return await api.getGathering(g.id, code)
+            const full = await api.getGathering(g.id, code || null)
+            const returned = (full as Gathering & { organizerCode?: string }).organizerCode
+            if (returned) saveOrganizerCode(g.id, returned)
+            return full
           } catch {
             return g
           }
@@ -143,8 +145,11 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
     try {
       const gathering = await api.getGathering(id)
       rememberGatheringId(id)
+      const code = (gathering as Gathering & { organizerCode?: string }).organizerCode
+      if (code) saveOrganizerCode(id, code)
       setGatherings((prev) => upsert(prev, gathering))
       setError(null)
+      setAccessTick((n) => n + 1)
       return gathering
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gathering not found')

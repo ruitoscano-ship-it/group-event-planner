@@ -42,6 +42,7 @@ import {
   resetAssistedMode,
 } from '../lib/assistedMode'
 import { useGatherings } from '../store/GatheringsContext'
+import { useOrganizerAuth } from '../store/OrganizerAuthContext'
 import type { AgeGroup, GroupMember } from '../types'
 
 type Tab = 'guests' | 'payments' | 'inbox'
@@ -92,7 +93,8 @@ export function EventPage() {
   const shareBoxRef = useRef<HTMLElement | null>(null)
   const codePanelRef = useRef<HTMLElement | null>(null)
   const menuFocusRef = useRef<HTMLDivElement | null>(null)
-  const canManage = hasOrganizerAccess(eventId)
+  const { ownsGathering, user: authUser, refreshAuth } = useOrganizerAuth()
+  const canManage = hasOrganizerAccess(eventId) || ownsGathering(eventId)
   const organizerCode = loadOrganizerCode(eventId)
   const [cardLink, setCardLink] = useState('')
   const [cardBusy, setCardBusy] = useState(false)
@@ -282,6 +284,9 @@ export function EventPage() {
         <section className="panel unlock-panel">
           <h2>{t('unlockEventTitle')}</h2>
           <p className="sub">{t('unlockEventSub', { title: gathering.title })}</p>
+          {authUser && (
+            <p className="sub">{t('unlockClaimHint', { email: authUser.email })}</p>
+          )}
           {unlockError && <p className="allergy">{unlockError}</p>}
           <form
             onSubmit={(e) => {
@@ -290,9 +295,10 @@ export function EventPage() {
               setUnlockBusy(true)
               setUnlockError(null)
               void unlockEvent(gathering.id, unlockCode.trim())
-                .then(() => {
+                .then(async () => {
                   setUnlockCode('')
                   setSearchParams({}, { replace: true })
+                  await refreshAuth()
                 })
                 .catch((err) => {
                   setUnlockError(
