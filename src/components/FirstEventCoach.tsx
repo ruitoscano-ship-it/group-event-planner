@@ -8,20 +8,10 @@ const STEPS: CoachStep[] = ['code', 'menu', 'share', 'done']
 type Props = {
   step: CoachStep
   onStep: (step: CoachStep) => void
-  onGoMenu: () => void
-  onGoShare: () => void
-  onGoCode: () => void
   onFinish: () => void
 }
 
-export function FirstEventCoach({
-  step,
-  onStep,
-  onGoMenu,
-  onGoShare,
-  onGoCode,
-  onFinish,
-}: Props) {
+export function FirstEventCoach({ step, onStep, onFinish }: Props) {
   const { t } = useI18n()
   const stepIndex = STEPS.indexOf(step)
 
@@ -54,20 +44,13 @@ export function FirstEventCoach({
     } as const
   )[step]
 
-  function focusStep(next: CoachStep) {
-    onStep(next)
-    if (next === 'code') onGoCode()
-    if (next === 'menu') onGoMenu()
-    if (next === 'share') onGoShare()
-  }
-
   function advance() {
     if (step === 'code') {
-      focusStep('menu')
+      onStep('menu')
       return
     }
     if (step === 'menu') {
-      focusStep('share')
+      onStep('share')
       return
     }
     if (step === 'share') {
@@ -79,8 +62,8 @@ export function FirstEventCoach({
   }
 
   function skip() {
-    if (step === 'code') focusStep('menu')
-    else if (step === 'menu') focusStep('share')
+    if (step === 'code') onStep('menu')
+    else if (step === 'menu') onStep('share')
     else if (step === 'share') onStep('done')
     else {
       markAssistedComplete()

@@ -99,6 +99,7 @@ export function EventPage() {
   const [guestPartyKind, setGuestPartyKind] = useState<PartyKind | null>(null)
   const shareBoxRef = useRef<HTMLDivElement | null>(null)
   const codePanelRef = useRef<HTMLElement | null>(null)
+  const menuFocusRef = useRef<HTMLDivElement | null>(null)
   const canManage = hasOrganizerAccess(eventId)
   const organizerCode = loadOrganizerCode(eventId)
   const [cardLink, setCardLink] = useState('')
@@ -169,6 +170,42 @@ export function EventPage() {
       if (safe) setCardLink(safe)
     }
   }, [gathering?.menuCardUrl])
+
+  useEffect(() => {
+    if (!canManage || !coachStep) return
+    if (coachStep === 'menu') setTab('menu')
+
+    let cancelled = false
+    let attempts = 0
+
+    function scrollToDemoTarget() {
+      if (cancelled) return
+      const target =
+        coachStep === 'code'
+          ? codePanelRef.current
+          : coachStep === 'menu'
+            ? menuFocusRef.current
+            : coachStep === 'share' || coachStep === 'done'
+              ? shareBoxRef.current
+              : null
+
+      if (!target) {
+        if (attempts < 8) {
+          attempts += 1
+          window.setTimeout(scrollToDemoTarget, 50)
+        }
+        return
+      }
+
+      target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
+    }
+
+    const timer = window.setTimeout(scrollToDemoTarget, 60)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [coachStep, canManage])
 
   useEffect(() => {
     if (!gathering) return
@@ -702,10 +739,10 @@ export function EventPage() {
         </div>
 
         <div
-          className={`event-stage-share ${coachStep === 'share' || coachStep === 'code' ? 'coach-target' : ''}`}
+          className={`event-stage-share ${coachStep === 'share' || coachStep === 'done' ? 'coach-target' : ''}`}
           ref={shareBoxRef}
         >
-          {(coachStep === 'share' || coachStep === 'code') && (
+          {(coachStep === 'share' || coachStep === 'done') && (
             <p className="demo-inline-tip">{t('demoTipShare')}</p>
           )}
           <div className="event-stage-share-label">
@@ -998,10 +1035,14 @@ export function EventPage() {
 
       {showTabs && (
         <>
+      <div
+        ref={menuFocusRef}
+        className={`demo-menu-focus ${coachStep === 'menu' ? 'coach-target' : ''}`}
+      >
       {coachStep === 'menu' && (
         <p className="demo-inline-tip">{t('demoTipMenu')}</p>
       )}
-      <div className={`tabs ${coachStep === 'menu' ? 'coach-target' : ''}`}>
+      <div className="tabs">
         {tabOptions.map(([key, label]) => (
           <button
             key={key}
@@ -1207,6 +1248,7 @@ export function EventPage() {
           </div>
         </>
       )}
+      </div>
 
       {tab === 'guests' && (
         <div className={`layout-split ${simpleMode ? 'guests-simple' : ''}`}>
@@ -1716,16 +1758,6 @@ export function EventPage() {
         <FirstEventCoach
           step={coachStep}
           onStep={setCoachStep}
-          onGoCode={() => {
-            codePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          }}
-          onGoMenu={() => {
-            setTab('menu')
-            window.scrollTo({ top: 0, behavior: 'smooth' })
-          }}
-          onGoShare={() => {
-            shareBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          }}
           onFinish={() => {
             markAssistedComplete()
             setCoachStep(null)

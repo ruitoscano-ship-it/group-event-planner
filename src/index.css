@@ -3941,11 +3941,23 @@ body[data-menu-sheet-open='1'] {
   background: rgba(248, 230, 200, 0.95);
 }
 
+.demo-menu-focus {
+  margin-bottom: 0.25rem;
+}
+
 .coach-target {
   outline: 2px solid rgba(232, 165, 75, 0.9);
   outline-offset: 4px;
   border-radius: 16px;
+  scroll-margin-top: 5.5rem;
+  scroll-margin-bottom: 16rem;
   animation: coach-pulse 1.6s ease infinite;
+}
+
+.organizer-code-panel.coach-target,
+.event-stage-share.coach-target,
+.demo-menu-focus.coach-target {
+  scroll-margin-bottom: 18rem;
 }
 
 @keyframes coach-pulse {
@@ -3964,6 +3976,13 @@ body[data-menu-sheet-open='1'] {
     right: 0.75rem;
     bottom: 0.75rem;
     width: auto;
+  }
+
+  .coach-target,
+  .organizer-code-panel.coach-target,
+  .event-stage-share.coach-target,
+  .demo-menu-focus.coach-target {
+    scroll-margin-bottom: 20rem;
   }
 }
 
