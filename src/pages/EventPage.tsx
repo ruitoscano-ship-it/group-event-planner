@@ -770,12 +770,14 @@ export function EventPage() {
                       id: 'setup-step-1',
                       n: 1,
                       label: t('setupStep1Short'),
+                      hint: t('setupStep1Hint'),
                       done: step1Done,
                     },
                     {
                       id: 'setup-step-2',
                       n: 2,
                       label: t('setupStep2Short'),
+                      hint: t('setupStep2Hint'),
                       done: step2Done,
                       optional: true,
                     },
@@ -783,12 +785,14 @@ export function EventPage() {
                       id: 'setup-step-3',
                       n: 3,
                       label: t('setupStep3Short'),
+                      hint: t('setupStep3Hint'),
                       done: step3Done,
                     },
                     {
                       id: 'setup-step-4',
                       n: 4,
                       label: t('setupStep4Short'),
+                      hint: t('setupStep4Hint'),
                       done: false,
                     },
                   ] as const
@@ -806,11 +810,14 @@ export function EventPage() {
                       <span className="setup-flow-map-num" aria-hidden>
                         {step.n}
                       </span>
-                      <span className="setup-flow-map-label">
-                        {step.label}
-                        {'optional' in step && step.optional ? (
-                          <em>{t('setupStepOptional')}</em>
-                        ) : null}
+                      <span className="setup-flow-map-copy">
+                        <span className="setup-flow-map-label">
+                          {step.label}
+                          {'optional' in step && step.optional ? (
+                            <em>{t('setupStepOptional')}</em>
+                          ) : null}
+                        </span>
+                        <span className="setup-flow-map-hint">{step.hint}</span>
                       </span>
                     </button>
                     {i < arr.length - 1 && (
