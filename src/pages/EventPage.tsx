@@ -741,14 +741,15 @@ export function EventPage() {
           )}
           <div className="event-stage-share-label">
             <strong>{t('selfServiceLink')}</strong>
+            <p className="event-stage-share-hint">{t('selfServiceLinkHint')}</p>
             <code>{rsvpUrl}</code>
           </div>
           <div className="event-stage-share-actions">
             <button className="btn btn-sm btn-accent" type="button" onClick={() => void copyLink()}>
-              {copied ? t('copied') : t('copyLink')}
+              {copied ? t('copied') : t('copyInviteLink')}
             </button>
             <Link viewTransition className="btn btn-sm btn-ghost" to={`/rsvp/${gathering.id}`}>
-              {t('openRsvp')}
+              {t('previewRsvp')}
             </Link>
             <button className="btn btn-sm btn-ghost" type="button" onClick={openFullReport}>
               {t('openEventReport')}

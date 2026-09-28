@@ -2294,11 +2294,20 @@ textarea {
 
 .event-stage-share-label strong {
   display: block;
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  opacity: 0.8;
-  margin-bottom: 0.2rem;
+  font-size: 0.95rem;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 1;
+  margin-bottom: 0.15rem;
+}
+
+.event-stage-share-hint {
+  margin: 0 0 0.45rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.78);
+  max-width: 28rem;
 }
 
 .event-stage-share-label code {
@@ -2306,8 +2315,8 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.84rem;
-  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .event-stage-share-actions {
