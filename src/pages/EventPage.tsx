@@ -90,7 +90,6 @@ export function EventPage() {
   const [codeError, setCodeError] = useState(false)
   const justCreated = searchParams.get('created') === '1'
   const [coachStep, setCoachStep] = useState<CoachStep | null>(null)
-  const [simpleMode, setSimpleMode] = useState(true)
   const [showGuestForm, setShowGuestForm] = useState(false)
   const [guestPartyKind, setGuestPartyKind] = useState<PartyKind | null>(null)
   const shareBoxRef = useRef<HTMLDivElement | null>(null)
@@ -656,23 +655,16 @@ export function EventPage() {
   }
 
   const guided = Boolean(coachStep && coachStep !== 'done')
-  const showDetails = !guided && !simpleMode
+  const showDetails = !guided
   const showMetrics = !guided
   const showCodePanel = !guided || coachStep === 'code'
   const showTabs = !guided || coachStep === 'menu'
-  const tabOptions = (
-    simpleMode
-      ? ([
-          ['menu', 'tabMenu'],
-          ['guests', 'tabGuests'],
-        ] as const)
-      : ([
-          ['menu', 'tabMenu'],
-          ['guests', 'tabGuests'],
-          ['payments', 'tabPayments'],
-          ['inbox', 'tabInbox'],
-        ] as const)
-  )
+  const tabOptions = [
+    ['menu', 'tabMenu'],
+    ['guests', 'tabGuests'],
+    ['payments', 'tabPayments'],
+    ['inbox', 'tabInbox'],
+  ] as const
 
   return (
     <>
@@ -696,26 +688,10 @@ export function EventPage() {
                 }
                 resetAssistedMode()
                 setCoachStep('code')
-                setSimpleMode(true)
                 setTab('menu')
               }}
             >
               {coachStep ? t('demoExit') : t('demoStart')}
-            </button>
-          )}
-          {!guided && (
-            <button
-              className="btn btn-ghost btn-sm topbar-secondary"
-              type="button"
-              onClick={() => {
-                setSimpleMode((v) => {
-                  const next = !v
-                  if (next && (tab === 'payments' || tab === 'inbox')) setTab('guests')
-                  return next
-                })
-              }}
-            >
-              {simpleMode ? t('organizerSimpleOff') : t('organizerSimpleOn')}
             </button>
           )}
           <button
@@ -777,11 +753,9 @@ export function EventPage() {
             <Link viewTransition className="btn btn-sm btn-ghost" to={`/rsvp/${gathering.id}`}>
               {t('openRsvp')}
             </Link>
-            {!simpleMode && (
-              <button className="btn btn-sm btn-ghost" type="button" onClick={openFullReport}>
-                {t('openEventReport')}
-              </button>
-            )}
+            <button className="btn btn-sm btn-ghost" type="button" onClick={openFullReport}>
+              {t('openEventReport')}
+            </button>
           </div>
         </div>
 
@@ -808,150 +782,149 @@ export function EventPage() {
       </section>
 
       {showDetails && (
-      <details className="panel event-details-fold" style={{ marginBottom: '1rem' }}>
-        <summary>
-          <span>
-            <strong>{t('editDetails')}</strong>
-            <em className="sub">{t('editDetailsSub')}</em>
-          </span>
-        </summary>
-        <div className="details-panel-head" style={{ marginTop: '0.85rem' }}>
-          <div />
-          {!editingDetails && (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => {
-                setEditingDetails(true)
-                setDetailsMsg(null)
-                setDetailsError(false)
-              }}
-            >
-              {t('editGuest')}
-            </button>
-          )}
-        </div>
-        {detailsMsg && (
-          <div
-            className={`feedback-banner ${detailsError ? 'error' : ''}`}
-            role="status"
-          >
-            {detailsMsg}
-          </div>
-        )}
-
-        {!editingDetails ? (
-          <dl className="details-summary">
+        <section className="panel event-details-panel" style={{ marginBottom: '1rem' }}>
+          <div className="details-panel-head">
             <div>
-              <dt>{t('date')}</dt>
-              <dd>
-                {gathering.date
-                  ? formatDate(gathering.date, localeTag, t('dateTbd'))
-                  : t('dateTbd')}
-              </dd>
+              <h2>{t('editDetails')}</h2>
+              <p className="sub">{t('editDetailsSub')}</p>
             </div>
-            <div>
-              <dt>{t('time')}</dt>
-              <dd>{gathering.time || '—'}</dd>
-            </div>
-            <div className="full">
-              <dt>{t('location')}</dt>
-              <dd>{gathering.location || t('locationTbd')}</dd>
-            </div>
-            <div>
-              <dt>{t('organizerName')}</dt>
-              <dd>{gathering.organizerName || '—'}</dd>
-            </div>
-            <div>
-              <dt>{t('organizerEmail')}</dt>
-              <dd>{gathering.organizerEmail || '—'}</dd>
-            </div>
-            <div className="full">
-              <dt>{t('organizerPhone')}</dt>
-              <dd>{gathering.organizerPhone || '—'}</dd>
-            </div>
-          </dl>
-        ) : (
-          <form onSubmit={(e) => void onSaveDetails(e)}>
-            <div className="form-grid">
-              <label>
-                {t('date')}
-                <input
-                  type="date"
-                  value={detailsForm.date}
-                  onChange={(e) => setDetailsForm({ ...detailsForm, date: e.target.value })}
-                />
-              </label>
-              <label>
-                {t('time')}
-                <input
-                  type="time"
-                  value={detailsForm.time}
-                  onChange={(e) => setDetailsForm({ ...detailsForm, time: e.target.value })}
-                />
-              </label>
-              <label className="full">
-                {t('location')}
-                <input
-                  value={detailsForm.location}
-                  onChange={(e) =>
-                    setDetailsForm({ ...detailsForm, location: e.target.value })
-                  }
-                  placeholder={t('placeholderLocation')}
-                />
-              </label>
-              <label>
-                {t('organizerName')}
-                <input
-                  value={detailsForm.organizerName}
-                  onChange={(e) =>
-                    setDetailsForm({ ...detailsForm, organizerName: e.target.value })
-                  }
-                  placeholder={t('organizerNamePlaceholder')}
-                  autoComplete="name"
-                />
-              </label>
-              <label>
-                {t('organizerEmail')}
-                <input
-                  type="email"
-                  value={detailsForm.organizerEmail}
-                  onChange={(e) =>
-                    setDetailsForm({ ...detailsForm, organizerEmail: e.target.value })
-                  }
-                  placeholder={t('placeholderEmail')}
-                  autoComplete="email"
-                />
-              </label>
-              <label className="full">
-                {t('organizerPhone')}
-                <input
-                  type="tel"
-                  value={detailsForm.organizerPhone}
-                  onChange={(e) =>
-                    setDetailsForm({ ...detailsForm, organizerPhone: e.target.value })
-                  }
-                  placeholder={t('placeholderPhone')}
-                  autoComplete="tel"
-                />
-              </label>
-            </div>
-            <div className="form-actions">
-              <button className="btn btn-accent" type="submit" disabled={detailsBusy}>
-                {detailsBusy ? t('saving') : t('saveDetails')}
-              </button>
+            {!editingDetails ? (
               <button
-                className="btn btn-ghost"
                 type="button"
-                onClick={cancelEditDetails}
-                disabled={detailsBusy}
+                className="btn btn-accent btn-sm"
+                onClick={() => {
+                  setEditingDetails(true)
+                  setDetailsMsg(null)
+                  setDetailsError(false)
+                }}
               >
-                {t('cancel')}
+                {t('editGuest')}
               </button>
+            ) : (
+              <span className="chip chip-warm">{t('editingLabel')}</span>
+            )}
+          </div>
+          {detailsMsg && (
+            <div
+              className={`feedback-banner ${detailsError ? 'error' : ''}`}
+              role="status"
+            >
+              {detailsMsg}
             </div>
-          </form>
-        )}
-      </details>
+          )}
+
+          {!editingDetails ? (
+            <dl className="details-summary">
+              <div>
+                <dt>{t('date')}</dt>
+                <dd>
+                  {gathering.date
+                    ? formatDate(gathering.date, localeTag, t('dateTbd'))
+                    : t('dateTbd')}
+                </dd>
+              </div>
+              <div>
+                <dt>{t('time')}</dt>
+                <dd>{gathering.time || '—'}</dd>
+              </div>
+              <div className="full">
+                <dt>{t('location')}</dt>
+                <dd>{gathering.location || t('locationTbd')}</dd>
+              </div>
+              <div>
+                <dt>{t('organizerName')}</dt>
+                <dd>{gathering.organizerName || '—'}</dd>
+              </div>
+              <div>
+                <dt>{t('organizerEmail')}</dt>
+                <dd>{gathering.organizerEmail || '—'}</dd>
+              </div>
+              <div className="full">
+                <dt>{t('organizerPhone')}</dt>
+                <dd>{gathering.organizerPhone || '—'}</dd>
+              </div>
+            </dl>
+          ) : (
+            <form onSubmit={(e) => void onSaveDetails(e)}>
+              <div className="form-grid">
+                <label>
+                  {t('date')}
+                  <input
+                    type="date"
+                    value={detailsForm.date}
+                    onChange={(e) => setDetailsForm({ ...detailsForm, date: e.target.value })}
+                  />
+                </label>
+                <label>
+                  {t('time')}
+                  <input
+                    type="time"
+                    value={detailsForm.time}
+                    onChange={(e) => setDetailsForm({ ...detailsForm, time: e.target.value })}
+                  />
+                </label>
+                <label className="full">
+                  {t('location')}
+                  <input
+                    value={detailsForm.location}
+                    onChange={(e) =>
+                      setDetailsForm({ ...detailsForm, location: e.target.value })
+                    }
+                    placeholder={t('placeholderLocation')}
+                  />
+                </label>
+                <label>
+                  {t('organizerName')}
+                  <input
+                    value={detailsForm.organizerName}
+                    onChange={(e) =>
+                      setDetailsForm({ ...detailsForm, organizerName: e.target.value })
+                    }
+                    placeholder={t('organizerNamePlaceholder')}
+                    autoComplete="name"
+                  />
+                </label>
+                <label>
+                  {t('organizerEmail')}
+                  <input
+                    type="email"
+                    value={detailsForm.organizerEmail}
+                    onChange={(e) =>
+                      setDetailsForm({ ...detailsForm, organizerEmail: e.target.value })
+                    }
+                    placeholder={t('placeholderEmail')}
+                    autoComplete="email"
+                  />
+                </label>
+                <label className="full">
+                  {t('organizerPhone')}
+                  <input
+                    type="tel"
+                    value={detailsForm.organizerPhone}
+                    onChange={(e) =>
+                      setDetailsForm({ ...detailsForm, organizerPhone: e.target.value })
+                    }
+                    placeholder={t('placeholderPhone')}
+                    autoComplete="tel"
+                  />
+                </label>
+              </div>
+              <div className="form-actions">
+                <button className="btn btn-accent" type="submit" disabled={detailsBusy}>
+                  {detailsBusy ? t('saving') : t('saveDetails')}
+                </button>
+                <button
+                  className="btn btn-ghost"
+                  type="button"
+                  onClick={cancelEditDetails}
+                  disabled={detailsBusy}
+                >
+                  {t('cancel')}
+                </button>
+              </div>
+            </form>
+          )}
+        </section>
       )}
 
       {showCodePanel && organizerCode && (
@@ -1324,7 +1297,7 @@ export function EventPage() {
       </div>
 
       {tab === 'guests' && (
-        <div className={`layout-split ${simpleMode ? 'guests-simple' : ''}`}>
+        <div className="layout-split">
           <section className="panel">
             <div className="details-panel-head">
               <div>
@@ -1361,13 +1334,11 @@ export function EventPage() {
                 ))}
               </div>
             )}
-            {!simpleMode && (
-              <div className="form-actions" style={{ marginTop: '0.85rem' }}>
-                <button className="btn btn-ghost btn-sm" type="button" onClick={openFullReport}>
-                  {t('openEventReport')}
-                </button>
-              </div>
-            )}
+            <div className="form-actions" style={{ marginTop: '0.85rem' }}>
+              <button className="btn btn-ghost btn-sm" type="button" onClick={openFullReport}>
+                {t('openEventReport')}
+              </button>
+            </div>
           </section>
 
           {showGuestForm && (
@@ -1834,7 +1805,6 @@ export function EventPage() {
           onFinish={() => {
             markAssistedComplete()
             setCoachStep(null)
-            setSimpleMode(true)
             setSearchParams({}, { replace: true })
           }}
         />
