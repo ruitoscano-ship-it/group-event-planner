@@ -5,6 +5,7 @@ import { EventCarteEditor } from '../components/EventCarteEditor'
 import { FirstEventCoach, type CoachStep } from '../components/FirstEventCoach'
 import { GroupSizeStepper } from '../components/GroupSizeStepper'
 import { GuestEditor } from '../components/GuestEditor'
+import { ImageUploadDropzone } from '../components/ImageUploadDropzone'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { MenuOrderField } from '../components/MenuOrderField'
 import { MenuPicker } from '../components/MenuPicker'
@@ -988,7 +989,12 @@ export function EventPage() {
           <section className="panel" style={{ marginBottom: '1rem' }}>
             <h2>{t('menuCard')}</h2>
             <p className="sub">{t('menuCardSub')}</p>
-            <div className="form-grid">
+            <ImageUploadDropzone
+              busy={cardBusy}
+              onFile={(file) => void onUploadCard(file)}
+            />
+            <details className="menu-card-link-fold">
+              <summary>{t('menuCardOrLink')}</summary>
               <label className="full">
                 {t('menuCardLink')}
                 <input
@@ -997,26 +1003,19 @@ export function EventPage() {
                   placeholder={t('menuCardLinkPlaceholder')}
                 />
               </label>
-              <label className="full">
-                {t('menuCardUpload')}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => void onUploadCard(e.target.files?.[0] ?? null)}
-                  disabled={cardBusy}
-                />
-              </label>
-            </div>
-            <div className="form-actions">
-              <button
-                className="btn btn-accent"
-                type="button"
-                disabled={cardBusy}
-                onClick={() => void saveCardLink()}
-              >
-                {cardBusy ? t('menuCardUploading') : t('menuCardSave')}
-              </button>
-              {gathering.menuCardUrl && (
+              <div className="form-actions" style={{ marginTop: '0.65rem' }}>
+                <button
+                  className="btn btn-accent"
+                  type="button"
+                  disabled={cardBusy || !cardLink.trim()}
+                  onClick={() => void saveCardLink()}
+                >
+                  {cardBusy ? t('menuCardUploading') : t('menuCardSave')}
+                </button>
+              </div>
+            </details>
+            {gathering.menuCardUrl && (
+              <div className="form-actions" style={{ marginTop: '0.75rem' }}>
                 <button
                   className="btn btn-ghost"
                   type="button"
@@ -1024,8 +1023,8 @@ export function EventPage() {
                 >
                   {t('menuCardClear')}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
             {cardMsg && (
               <div className="feedback-banner" role="status" style={{ marginTop: '0.75rem' }}>
                 {cardMsg}

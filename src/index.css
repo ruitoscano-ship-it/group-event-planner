@@ -1498,6 +1498,112 @@ textarea {
   background: #fff;
 }
 
+.image-upload {
+  margin: 0.35rem 0 0.75rem;
+}
+
+.image-upload-zone {
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 1.35rem 1rem;
+  border: 1.5px dashed rgba(0, 107, 95, 0.35);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(0, 163, 143, 0.08), transparent 55%),
+    #f7fbf9;
+  color: var(--ink-soft);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.image-upload-zone:hover:not(:disabled) {
+  border-color: var(--green);
+  background: var(--green-soft);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(6, 40, 35, 0.06);
+}
+
+.image-upload-zone:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--green-soft);
+  border-color: var(--green-deep);
+}
+
+.image-upload-zone.is-dragging {
+  border-color: var(--green-deep);
+  border-style: solid;
+  background: var(--green-soft);
+}
+
+.image-upload-zone.is-busy,
+.image-upload-zone:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
+.image-upload-icon {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-bottom: 0.15rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--green-deep);
+  box-shadow: 0 1px 0 rgba(6, 40, 35, 0.04);
+}
+
+.image-upload-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.image-upload-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.menu-card-link-fold {
+  margin-top: 0.25rem;
+  border-top: 1px solid rgba(6, 40, 35, 0.08);
+  padding-top: 0.55rem;
+}
+
+.menu-card-link-fold summary {
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: var(--muted);
+  list-style: none;
+}
+
+.menu-card-link-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu-card-link-fold[open] summary {
+  color: var(--ink-soft);
+  margin-bottom: 0.55rem;
+}
+
+.menu-card-link-fold label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 650;
+  color: var(--ink-soft);
+}
+
 @media (max-width: 860px) {
   .app-shell {
     width: min(100%, calc(100% - 1.25rem));
