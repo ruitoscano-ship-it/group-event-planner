@@ -172,6 +172,17 @@ export function EventPage() {
   }, [gathering?.menuCardUrl])
 
   useEffect(() => {
+    if (!canManage || !coachStep) {
+      delete document.body.dataset.demoOpen
+      return
+    }
+    document.body.dataset.demoOpen = '1'
+    return () => {
+      delete document.body.dataset.demoOpen
+    }
+  }, [coachStep, canManage])
+
+  useEffect(() => {
     if (!canManage || !coachStep) return
     if (coachStep === 'menu') setTab('menu')
 
@@ -659,57 +670,109 @@ export function EventPage() {
         </Link>
         <div className="nav-actions">
           <LanguageSwitcher />
-          {canManage && (
+          <div className="nav-actions-desktop">
+            {canManage && (
+              <button
+                className={`btn btn-sm ${coachStep ? 'btn-accent' : 'btn-ghost'}`}
+                type="button"
+                onClick={() => {
+                  if (coachStep) {
+                    markAssistedComplete()
+                    setCoachStep(null)
+                    setSearchParams({}, { replace: true })
+                    return
+                  }
+                  resetAssistedMode()
+                  setCoachStep('code')
+                  setSimpleMode(true)
+                  setTab('menu')
+                }}
+              >
+                {coachStep ? t('demoExit') : t('demoStart')}
+              </button>
+            )}
+            {!guided && (
+              <button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                onClick={() => {
+                  setSimpleMode((v) => {
+                    const next = !v
+                    if (next && (tab === 'payments' || tab === 'inbox')) setTab('guests')
+                    return next
+                  })
+                }}
+              >
+                {simpleMode ? t('organizerSimpleOff') : t('organizerSimpleOn')}
+              </button>
+            )}
             <button
-              className={`btn btn-sm ${coachStep ? 'btn-accent' : 'btn-ghost'}`}
+              className="btn btn-danger btn-sm"
               type="button"
               onClick={() => {
-                if (coachStep) {
-                  markAssistedComplete()
-                  setCoachStep(null)
-                  setSearchParams({}, { replace: true })
-                  return
-                }
-                resetAssistedMode()
-                setCoachStep('code')
-                setSimpleMode(true)
-                setTab('menu')
-                window.setTimeout(() => {
-                  codePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                }, 50)
+                void (async () => {
+                  if (!confirm(t('deleteConfirm'))) return
+                  await deleteGathering(gathering.id)
+                  navigate('/', { viewTransition: true })
+                })()
               }}
             >
-              {coachStep ? t('demoExit') : t('demoStart')}
+              {t('delete')}
             </button>
-          )}
-          {!guided && (
-            <button
-              className="btn btn-ghost btn-sm"
-              type="button"
-              onClick={() => {
-                setSimpleMode((v) => {
-                  const next = !v
-                  if (next && (tab === 'payments' || tab === 'inbox')) setTab('guests')
-                  return next
-                })
-              }}
-            >
-              {simpleMode ? t('organizerSimpleOff') : t('organizerSimpleOn')}
-            </button>
-          )}
-          <button
-            className="btn btn-danger btn-sm"
-            type="button"
-            onClick={() => {
-              void (async () => {
-                if (!confirm(t('deleteConfirm'))) return
-                await deleteGathering(gathering.id)
-                navigate('/', { viewTransition: true })
-              })()
-            }}
-          >
-            {t('delete')}
-          </button>
+          </div>
+          <details className="topbar-more">
+            <summary>{t('moreActions')}</summary>
+            <div className="topbar-more-panel">
+              {canManage && (
+                <button
+                  className={`btn btn-sm ${coachStep ? 'btn-accent' : 'btn-ghost'}`}
+                  type="button"
+                  onClick={() => {
+                    if (coachStep) {
+                      markAssistedComplete()
+                      setCoachStep(null)
+                      setSearchParams({}, { replace: true })
+                      return
+                    }
+                    resetAssistedMode()
+                    setCoachStep('code')
+                    setSimpleMode(true)
+                    setTab('menu')
+                  }}
+                >
+                  {coachStep ? t('demoExit') : t('demoStart')}
+                </button>
+              )}
+              {!guided && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  type="button"
+                  onClick={() => {
+                    setSimpleMode((v) => {
+                      const next = !v
+                      if (next && (tab === 'payments' || tab === 'inbox')) setTab('guests')
+                      return next
+                    })
+                  }}
+                >
+                  {simpleMode ? t('organizerSimpleOff') : t('organizerSimpleOn')}
+                </button>
+              )}
+              <button
+                className="btn btn-danger btn-sm"
+                type="button"
+                onClick={() => {
+                  void (async () => {
+                    if (!confirm(t('deleteConfirm'))) return
+                    await deleteGathering(gathering.id)
+                    navigate('/', { viewTransition: true })
+                  })()
+                }}
+              >
+                {t('delete')}
+              </button>
+            </div>
+          </details>
         </div>
       </header>
 

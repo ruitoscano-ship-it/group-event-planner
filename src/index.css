@@ -60,6 +60,13 @@ body {
   background-attachment: fixed;
 }
 
+@media (max-width: 860px) {
+  body {
+    background-attachment: scroll;
+    min-width: 0;
+  }
+}
+
 body::before {
   content: '';
   position: fixed;
@@ -98,9 +105,19 @@ h3,
   position: relative;
   width: min(1160px, calc(100% - 2rem));
   margin: 0 auto;
-  padding: 1rem 0 calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  padding: calc(1rem + env(safe-area-inset-top, 0px)) 0
+    calc(4.5rem + env(safe-area-inset-bottom, 0px));
   padding-left: max(0px, env(safe-area-inset-left, 0px));
   padding-right: max(0px, env(safe-area-inset-right, 0px));
+}
+
+body[data-demo-open='1'] .app-shell {
+  padding-bottom: calc(18rem + env(safe-area-inset-bottom, 0px));
+}
+
+body[data-demo-open='1'] .sticky-actions,
+body[data-demo-open='1'] .rsvp-sticky {
+  bottom: calc(13.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 .page-stage {
@@ -216,6 +233,56 @@ h3,
   gap: 0.5rem;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.nav-actions-desktop {
+  display: contents;
+}
+
+.topbar-more {
+  display: none;
+}
+
+.topbar-more > summary {
+  list-style: none;
+  cursor: pointer;
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.topbar-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.topbar-more-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  z-index: 30;
+  display: grid;
+  gap: 0.4rem;
+  min-width: 11.5rem;
+  padding: 0.55rem;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+  box-shadow: 0 14px 32px rgba(6, 40, 35, 0.14);
+}
+
+.topbar-more-panel .btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .lang-switch {
@@ -578,16 +645,27 @@ h3,
   }
 
   .landing-visual {
-    min-height: 240px;
+    min-height: min(28vh, 160px);
+    max-height: 160px;
     order: -1;
   }
 
+  .landing-visual::after {
+    background: linear-gradient(180deg, transparent 20%, rgba(0, 40, 35, 0.55));
+  }
+
   .landing-copy {
-    padding: 1.25rem 1.2rem 1.5rem;
+    padding: 1rem 1.15rem 1.25rem;
   }
 
   .landing-brand {
-    font-size: clamp(2.5rem, 12vw, 3.3rem);
+    font-size: clamp(2.35rem, 11vw, 3rem);
+    margin-bottom: 0.65rem;
+  }
+
+  .landing .hero-lede {
+    margin-bottom: 1.1rem;
+    font-size: 1rem;
   }
 
   .landing-actions {
@@ -596,6 +674,16 @@ h3,
 
   .landing-panel {
     max-height: none;
+  }
+
+  .landing-panel-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.55rem;
+  }
+
+  .landing-panel-head .btn {
+    width: 100%;
   }
 }
 
@@ -1883,6 +1971,10 @@ textarea {
     padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
   }
 
+  body[data-demo-open='1'] .app-shell {
+    padding-bottom: calc(16rem + env(safe-area-inset-bottom, 0px));
+  }
+
   .btn-sm {
     min-height: 44px;
   }
@@ -1898,6 +1990,59 @@ textarea {
   .person-picks,
   .member-picks {
     font-size: 0.88rem;
+  }
+
+  .party-kind {
+    grid-template-columns: 1fr;
+  }
+
+  .create-chat-actions {
+    flex-direction: column-reverse;
+  }
+
+  .create-chat-actions .btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .form-actions .btn {
+    width: 100%;
+  }
+
+  .topbar {
+    border-radius: 20px;
+    align-items: flex-start;
+    gap: 0.65rem;
+  }
+
+  .nav-actions-desktop {
+    display: none;
+  }
+
+  .topbar-more {
+    display: block;
+    position: relative;
+  }
+
+  .rsvp-steps {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .rsvp-step {
+    width: 100%;
+  }
+
+  .menu-card-link-fold summary,
+  .rsvp-optional summary,
+  .site-footer-disclosure summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
   }
 }
 
@@ -2107,16 +2252,31 @@ textarea {
   }
 
   .landing-visual {
-    min-height: 220px;
+    min-height: min(28vh, 160px);
+    max-height: 160px;
     order: -1;
   }
 
   .landing-visual::after {
-    background: linear-gradient(180deg, transparent 30%, rgba(0, 40, 35, 0.55));
+    background: linear-gradient(180deg, transparent 20%, rgba(0, 40, 35, 0.55));
   }
 
   .event-stage-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-stage-share-actions {
+    flex-direction: column;
+  }
+
+  .event-stage-share-actions .btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 400px) {
+  .event-stage-metrics {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2413,9 +2573,9 @@ textarea {
 
 .group-people-row .age-option {
   flex: 1;
-  min-height: 36px;
+  min-height: 44px;
   font-size: 0.78rem;
-  padding: 0.35rem 0.5rem;
+  padding: 0.45rem 0.5rem;
 }
 
 .group-people-index {
@@ -3326,6 +3486,12 @@ body[data-menu-sheet-open='1'] {
   flex-wrap: wrap;
   gap: 0.55rem;
   justify-content: flex-end;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin-top: 0.85rem;
+  padding: 0.65rem 0 calc(0.35rem + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(180deg, transparent, #fff 35%);
 }
 
 .create-chat-actions .btn {
@@ -3835,9 +4001,11 @@ body[data-menu-sheet-open='1'] {
 .first-event-coach {
   position: fixed;
   right: 1rem;
-  bottom: 1rem;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   z-index: 40;
   width: min(24rem, calc(100vw - 2rem));
+  max-height: min(42vh, 22rem);
+  overflow: auto;
   padding: 1rem 1.1rem 0.95rem;
   border-radius: 18px;
   background: #fff;
@@ -3974,15 +4142,33 @@ body[data-menu-sheet-open='1'] {
   .first-event-coach {
     left: 0.75rem;
     right: 0.75rem;
-    bottom: 0.75rem;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
     width: auto;
+    max-height: min(38vh, 18rem);
+    padding: 0.85rem 0.95rem;
+  }
+
+  .demo-roadmap li {
+    font-size: 0;
+  }
+
+  .demo-roadmap li span {
+    font-size: 0.72rem;
+  }
+
+  .first-event-coach h2 {
+    font-size: 0.98rem;
+  }
+
+  .first-event-coach > p {
+    font-size: 0.84rem;
   }
 
   .coach-target,
   .organizer-code-panel.coach-target,
   .event-stage-share.coach-target,
   .demo-menu-focus.coach-target {
-    scroll-margin-bottom: 20rem;
+    scroll-margin-bottom: 14rem;
   }
 }
 

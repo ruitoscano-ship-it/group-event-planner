@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type ChangeEvent } from 'react'
 import { useI18n } from '../i18n/I18nContext'
 
 type Props = {
@@ -6,10 +6,25 @@ type Props = {
   onFile: (file: File | null) => void
 }
 
+function useIsMobile() {
+  const [mobile, setMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 720px)')
+    const onChange = () => setMobile(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return mobile
+}
+
 export function ImageUploadDropzone({ busy = false, onFile }: Props) {
   const { t } = useI18n()
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [dragging, setDragging] = useState(false)
+  const mobile = useIsMobile()
 
   function pickFile(file: File | null) {
     if (!file || busy) return
@@ -76,9 +91,15 @@ export function ImageUploadDropzone({ busy = false, onFile }: Props) {
           </svg>
         </span>
         <span className="image-upload-title">
-          {busy ? t('menuCardUploading') : t('menuCardDropTitle')}
+          {busy
+            ? t('menuCardUploading')
+            : mobile
+              ? t('menuCardDropTitleMobile')
+              : t('menuCardDropTitle')}
         </span>
-        <span className="image-upload-hint">{t('menuCardDropHint')}</span>
+        <span className="image-upload-hint">
+          {mobile ? t('menuCardDropHintMobile') : t('menuCardDropHint')}
+        </span>
       </button>
     </div>
   )

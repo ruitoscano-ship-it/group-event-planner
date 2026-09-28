@@ -34,11 +34,16 @@ export function CreateEventChat({ onCancel, onCreate }: Props) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
+  const actionsRef = useRef<HTMLDivElement | null>(null)
 
   const stepIndex = STEPS.indexOf(step)
 
   useEffect(() => {
-    inputRef.current?.focus()
+    inputRef.current?.focus({ preventScroll: true })
+    const timer = window.setTimeout(() => {
+      actionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 120)
+    return () => window.clearTimeout(timer)
   }, [step])
 
   function askFor(next: Step) {
@@ -202,7 +207,7 @@ export function CreateEventChat({ onCancel, onCreate }: Props) {
             placeholder={t('placeholderTitle')}
             autoComplete="off"
           />
-          <div className="create-chat-actions">
+          <div className="create-chat-actions" ref={actionsRef}>
             <button className="btn btn-accent" type="submit" disabled={!form.title.trim()}>
               {t('createChatContinue')}
             </button>
@@ -255,7 +260,7 @@ export function CreateEventChat({ onCancel, onCreate }: Props) {
               />
             </label>
           </div>
-          <div className="create-chat-actions">
+          <div className="create-chat-actions" ref={actionsRef}>
             <button className="btn btn-accent" type="submit">
               {t('createChatContinue')}
             </button>
@@ -274,7 +279,7 @@ export function CreateEventChat({ onCancel, onCreate }: Props) {
             placeholder={t('placeholderLocation')}
             autoComplete="street-address"
           />
-          <div className="create-chat-actions">
+          <div className="create-chat-actions" ref={actionsRef}>
             <button className="btn btn-ghost" type="button" onClick={skipWhere}>
               {t('createChatSkip')}
             </button>
@@ -296,7 +301,7 @@ export function CreateEventChat({ onCancel, onCreate }: Props) {
             placeholder={t('organizerNamePlaceholder')}
             autoComplete="name"
           />
-          <div className="create-chat-actions">
+          <div className="create-chat-actions" ref={actionsRef}>
             <button className="btn btn-ghost" type="button" onClick={skipWho}>
               {t('createChatSkip')}
             </button>
@@ -318,7 +323,7 @@ export function CreateEventChat({ onCancel, onCreate }: Props) {
             placeholder={t('placeholderNotes')}
             rows={3}
           />
-          <div className="create-chat-actions">
+          <div className="create-chat-actions" ref={actionsRef}>
             <button className="btn btn-ghost" type="button" onClick={skipNotes}>
               {t('createChatSkip')}
             </button>
