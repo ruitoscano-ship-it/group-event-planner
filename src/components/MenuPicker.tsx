@@ -59,8 +59,10 @@ export function MenuPicker({
                 )}
               </span>
               <span className="menu-option-meta">
-                {item.category}
-                {item.description ? ` · ${item.description}` : ''}
+                {item.description || item.category}
+                {!item.isAlaCarte && item.exclusions
+                  ? ` · ${t('setMenuExclusions')}: ${item.exclusions}`
+                  : ''}
               </span>
             </span>
             <span className="menu-option-price">

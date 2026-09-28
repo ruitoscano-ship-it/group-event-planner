@@ -118,9 +118,9 @@ export function EventPage() {
   const [menuForm, setMenuForm] = useState({
     name: '',
     description: '',
+    exclusions: '',
     price: '',
-    category: '',
-    isAlaCarte: false,
+    kind: 'set' as 'set' | 'alacarte',
   })
   const [guestForm, setGuestForm] = useState({
     name: '',
@@ -479,28 +479,45 @@ export function EventPage() {
   async function onAddMenu(e: FormEvent) {
     e.preventDefault()
     if (!gathering) return
+    const isAlaCarte = menuForm.kind === 'alacarte'
     const price = Number(menuForm.price)
     if (!menuForm.name.trim() || busy) return
-    if (!menuForm.isAlaCarte && (Number.isNaN(price) || price < 0)) return
+    if (!isAlaCarte && (Number.isNaN(price) || price < 0)) return
     setBusy(true)
     try {
       await addMenuItem(gathering.id, {
         name: menuForm.name.trim(),
         description: menuForm.description.trim(),
-        price: menuForm.isAlaCarte ? 0 : price,
-        category: menuForm.category.trim() || t('placeholderCategory'),
-        isAlaCarte: menuForm.isAlaCarte,
+        exclusions: isAlaCarte ? '' : menuForm.exclusions.trim(),
+        price: isAlaCarte ? 0 : price,
+        category: isAlaCarte ? t('alaCarte') : t('setMenu'),
+        isAlaCarte,
       })
       setMenuForm({
         name: '',
         description: '',
+        exclusions: '',
         price: '',
-        category: '',
-        isAlaCarte: false,
+        kind: 'set',
       })
       setMenuMsg(pickFeedback(t, [...menuItemSavedKeys]))
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function clearMenuCard() {
+    if (!gathering || cardBusy) return
+    setCardBusy(true)
+    setCardMsg(null)
+    try {
+      await setMenuCard(gathering.id, '')
+      setCardLink('')
+      setCardMsg(t('menuCardCleared'))
+    } catch (err) {
+      setCardMsg(err instanceof Error ? err.message : t('menuCardClear'))
+    } finally {
+      setCardBusy(false)
     }
   }
 
@@ -1095,17 +1112,6 @@ export function EventPage() {
                 </button>
               </div>
             </details>
-            {gathering.menuCardUrl && (
-              <div className="form-actions" style={{ marginTop: '0.75rem' }}>
-                <button
-                  className="btn btn-ghost"
-                  type="button"
-                  onClick={() => void setMenuCard(gathering.id, '')}
-                >
-                  {t('menuCardClear')}
-                </button>
-              </div>
-            )}
             {cardMsg && (
               <div className="feedback-banner" role="status" style={{ marginTop: '0.75rem' }}>
                 {cardMsg}
@@ -1114,16 +1120,38 @@ export function EventPage() {
             {safeMediaUrl(gathering.menuCardUrl) && (
               <div className="menu-card-preview">
                 <img src={safeMediaUrl(gathering.menuCardUrl)} alt={t('menuCard')} />
-                {!safeMediaUrl(gathering.menuCardUrl).startsWith('data:') && (
-                  <a
-                    className="btn btn-ghost btn-sm"
-                    href={safeMediaUrl(gathering.menuCardUrl)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                <div className="menu-card-preview-actions">
+                  {!safeMediaUrl(gathering.menuCardUrl).startsWith('data:') && (
+                    <a
+                      className="btn btn-ghost btn-sm"
+                      href={safeMediaUrl(gathering.menuCardUrl)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {t('menuCardOpen')}
+                    </a>
+                  )}
+                  <button
+                    className="btn btn-danger btn-sm"
+                    type="button"
+                    disabled={cardBusy}
+                    onClick={() => void clearMenuCard()}
                   >
-                    {t('menuCardOpen')}
-                  </a>
-                )}
+                    {t('menuCardClear')}
+                  </button>
+                </div>
+              </div>
+            )}
+            {!safeMediaUrl(gathering.menuCardUrl) && gathering.menuCardUrl && (
+              <div className="form-actions" style={{ marginTop: '0.75rem' }}>
+                <button
+                  className="btn btn-danger btn-sm"
+                  type="button"
+                  disabled={cardBusy}
+                  onClick={() => void clearMenuCard()}
+                >
+                  {t('menuCardClear')}
+                </button>
               </div>
             )}
           </section>
@@ -1143,63 +1171,96 @@ export function EventPage() {
                 </div>
               )}
               <form onSubmit={(e) => void onAddMenu(e)}>
+                <div className="menu-kind" role="group" aria-label={t('menuKindLabel')}>
+                  <button
+                    type="button"
+                    className={`menu-kind-option ${menuForm.kind === 'set' ? 'selected' : ''}`}
+                    aria-pressed={menuForm.kind === 'set'}
+                    onClick={() => setMenuForm({ ...menuForm, kind: 'set' })}
+                  >
+                    <strong>{t('setMenu')}</strong>
+                    <span>{t('setMenuSub')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`menu-kind-option ${menuForm.kind === 'alacarte' ? 'selected' : ''}`}
+                    aria-pressed={menuForm.kind === 'alacarte'}
+                    onClick={() =>
+                      setMenuForm({ ...menuForm, kind: 'alacarte', price: '', exclusions: '' })
+                    }
+                  >
+                    <strong>{t('alaCarte')}</strong>
+                    <span>{t('alaCarteHint')}</span>
+                  </button>
+                </div>
+
                 <div className="form-grid">
                   <label className="full">
-                    {t('name')}
+                    {menuForm.kind === 'set' ? t('setMenuName') : t('alaCarteName')}
                     <input
                       required
                       value={menuForm.name}
                       onChange={(e) => setMenuForm({ ...menuForm, name: e.target.value })}
-                      placeholder={t('placeholderDish')}
-                    />
-                  </label>
-                  <label>
-                    {t('category')}
-                    <input
-                      value={menuForm.category}
-                      onChange={(e) =>
-                        setMenuForm({ ...menuForm, category: e.target.value })
-                      }
-                      placeholder={t('placeholderCategory')}
-                    />
-                  </label>
-                  <label>
-                    {t('price')} ({gathering.currency})
-                    <input
-                      required={!menuForm.isAlaCarte}
-                      disabled={menuForm.isAlaCarte}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={menuForm.isAlaCarte ? '' : menuForm.price}
-                      onChange={(e) => setMenuForm({ ...menuForm, price: e.target.value })}
-                      placeholder={menuForm.isAlaCarte ? '—' : '12.50'}
-                    />
-                  </label>
-                  <label className="full paid-toggle">
-                    <input
-                      type="checkbox"
-                      checked={menuForm.isAlaCarte}
-                      onChange={(e) =>
-                        setMenuForm({
-                          ...menuForm,
-                          isAlaCarte: e.target.checked,
-                          price: e.target.checked ? '' : menuForm.price,
-                        })
+                      placeholder={
+                        menuForm.kind === 'set'
+                          ? t('setMenuNamePlaceholder')
+                          : t('alaCarteNamePlaceholder')
                       }
                     />
-                    {t('alaCarte')} — {t('alaCarteHint')}
                   </label>
-                  <label className="full">
-                    {t('description')}
-                    <textarea
-                      value={menuForm.description}
-                      onChange={(e) =>
-                        setMenuForm({ ...menuForm, description: e.target.value })
-                      }
-                      placeholder={t('placeholderDishDesc')}
-                    />
-                  </label>
+
+                  {menuForm.kind === 'set' ? (
+                    <>
+                      <label className="full">
+                        {t('pricePerPerson')} ({gathering.currency})
+                        <input
+                          required
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={menuForm.price}
+                          onChange={(e) =>
+                            setMenuForm({ ...menuForm, price: e.target.value })
+                          }
+                          placeholder="25.00"
+                        />
+                      </label>
+                      <label className="full">
+                        {t('setMenuIncludes')}
+                        <textarea
+                          value={menuForm.description}
+                          onChange={(e) =>
+                            setMenuForm({ ...menuForm, description: e.target.value })
+                          }
+                          placeholder={t('setMenuIncludesPlaceholder')}
+                          rows={3}
+                        />
+                      </label>
+                      <label className="full">
+                        {t('setMenuExclusions')}
+                        <textarea
+                          value={menuForm.exclusions}
+                          onChange={(e) =>
+                            setMenuForm({ ...menuForm, exclusions: e.target.value })
+                          }
+                          placeholder={t('setMenuExclusionsPlaceholder')}
+                          rows={2}
+                        />
+                      </label>
+                    </>
+                  ) : (
+                    <label className="full">
+                      {t('description')}
+                      <textarea
+                        value={menuForm.description}
+                        onChange={(e) =>
+                          setMenuForm({ ...menuForm, description: e.target.value })
+                        }
+                        placeholder={t('alaCarteDescPlaceholder')}
+                        rows={2}
+                      />
+                    </label>
+                  )}
                 </div>
                 <div className="form-actions">
                   <button className="btn btn-accent" type="submit" disabled={busy}>
@@ -1219,14 +1280,22 @@ export function EventPage() {
                   {gathering.menu.map((item) => (
                     <div key={item.id} className="menu-row">
                       <div>
-                        <span className="chip chip-muted">{item.category}</span>
-                        {item.isAlaCarte && (
-                          <span className="chip chip-warm" style={{ marginLeft: '0.35rem' }}>
-                            {t('alaCarte')}
-                          </span>
-                        )}
+                        <span className="chip chip-muted">
+                          {item.isAlaCarte ? t('alaCarte') : t('setMenu')}
+                        </span>
                         <h4>{item.name}</h4>
-                        {item.description && <p>{item.description}</p>}
+                        {item.description && (
+                          <p>
+                            <strong>{item.isAlaCarte ? '' : `${t('setMenuIncludes')}: `}</strong>
+                            {item.description}
+                          </p>
+                        )}
+                        {!item.isAlaCarte && item.exclusions && (
+                          <p className="menu-exclusions">
+                            <strong>{t('setMenuExclusions')}: </strong>
+                            {item.exclusions}
+                          </p>
+                        )}
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div className="price">

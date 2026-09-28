@@ -248,6 +248,7 @@ function normalizeGathering(raw: Gathering & { menuOcrLines?: string[] }): Gathe
       category: clip(m.category, 60) || 'Mains',
       isAlaCarte: Boolean(m.isAlaCarte),
       price: m.isAlaCarte ? 0 : Math.max(0, Number(m.price) || 0),
+      exclusions: clip(m.exclusions || '', MAX_TEXT),
     })),
     attendees: (raw.attendees || []).slice(0, MAX_ATTENDEES).map((a) => {
       const members = Array.isArray(a.members)
@@ -839,8 +840,9 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       name: clip(body.name, MAX_NAME),
       description: clip(body.description, MAX_TEXT),
       price: isAlaCarte ? 0 : Math.max(0, Number(body.price) || 0),
-      category: clip(body.category, 60) || 'Mains',
+      category: clip(body.category, 60) || (isAlaCarte ? 'À la carte' : 'Menu'),
       isAlaCarte,
+      exclusions: isAlaCarte ? '' : clip(body.exclusions || '', MAX_TEXT),
     }
     gathering.menu.push(item)
     await writeGathering(env.DB, gathering, false)

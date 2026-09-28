@@ -1538,6 +1538,73 @@ textarea {
   background: #fff;
 }
 
+.menu-card-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.menu-kind {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin: 0.85rem 0 1rem;
+}
+
+.menu-kind-option {
+  display: grid;
+  gap: 0.25rem;
+  text-align: left;
+  padding: 0.85rem 0.95rem;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.menu-kind-option strong {
+  font-size: 0.95rem;
+}
+
+.menu-kind-option span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.menu-kind-option:hover {
+  border-color: rgba(0, 107, 95, 0.35);
+}
+
+.menu-kind-option.selected {
+  border-color: var(--accent);
+  background: rgba(0, 163, 143, 0.08);
+  box-shadow: 0 0 0 1px rgba(0, 163, 143, 0.2);
+}
+
+.menu-kind-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.menu-exclusions {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 560px) {
+  .menu-kind {
+    grid-template-columns: 1fr;
+  }
+}
+
 .image-upload {
   margin: 0.35rem 0 0.75rem;
 }

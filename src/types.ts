@@ -8,6 +8,8 @@ export type MenuItem = {
   category: string
   /** When true, price is variable / TBD — not used for billing totals. */
   isAlaCarte: boolean
+  /** Optional exclusions for a set menu (e.g. drinks, dessert). */
+  exclusions?: string
 }
 
 /** Dish on the event carte (from OCR or manually added by organizer). */

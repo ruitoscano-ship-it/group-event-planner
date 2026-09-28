@@ -7,6 +7,7 @@ export type MenuItem = {
   price: number
   category: string
   isAlaCarte: boolean
+  exclusions?: string
 }
 
 export type CarteItem = {
