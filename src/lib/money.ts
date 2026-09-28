@@ -44,6 +44,8 @@ export function createMemberDraft(partial?: Partial<GroupMember>): GroupMember {
     allergies: '',
     menuRequest: '',
     ageGroup: 'adult',
+    amountPaid: 0,
+    extraAmount: 0,
     ...partial,
   }
 }
@@ -103,6 +105,42 @@ export function unitPriceForIds(ids: string[], menu: MenuItem[]): number {
   }, 0)
 }
 
+/** Fixed-menu owed for one person’s selected menu item ids. */
+export function personMenuOwed(ids: string[], menu: MenuItem[]): number {
+  return unitPriceForIds(ids, menu)
+}
+
+export function personTotal(menuOwed: number, extraAmount = 0): number {
+  return Math.max(0, menuOwed) + Math.max(0, extraAmount || 0)
+}
+
+export function personRemaining(
+  menuOwed: number,
+  extraAmount: number,
+  amountPaid: number,
+): number {
+  return Math.max(0, personTotal(menuOwed, extraAmount) - Math.max(0, amountPaid || 0))
+}
+
+export function isPersonSettled(
+  menuOwed: number,
+  extraAmount: number,
+  amountPaid: number,
+): boolean {
+  return personRemaining(menuOwed, extraAmount, amountPaid) <= 0.001
+}
+
+/** Legacy group paid on the RSVP parent before per-member billing. */
+export function legacyUnallocatedPaid(attendee: Attendee): number {
+  if (!attendee.isGroup || !attendee.members?.length) return 0
+  const membersPaid = attendee.members.reduce(
+    (sum, m) => sum + Math.max(0, m.amountPaid || 0),
+    0,
+  )
+  if (membersPaid > 0) return 0
+  return Math.max(0, attendee.amountPaid || 0)
+}
+
 export function idsHaveAlaCarte(ids: string[], menu: MenuItem[]): boolean {
   return ids.some((id) => menu.find((m) => m.id === id)?.isAlaCarte)
 }
@@ -118,15 +156,37 @@ export function attendeeUnitPrice(attendee: Attendee, menu: MenuItem[]): number 
   return unitPriceForIds(attendee.menuItemIds, menu)
 }
 
+/** Total owed (menu + extras) for an RSVP / party. */
 export function attendeeTotal(attendee: Attendee, menu: MenuItem[]): number {
   if (attendee.isGroup && attendee.members?.length) {
     return attendee.members.reduce(
-      (sum, m) => sum + unitPriceForIds(m.menuItemIds, menu),
+      (sum, m) =>
+        sum + personTotal(personMenuOwed(m.menuItemIds, menu), m.extraAmount || 0),
       0,
     )
   }
   // Legacy groups: one shared menu × people
-  return unitPriceForIds(attendee.menuItemIds, menu) * partySize(attendee)
+  const menuPart = personMenuOwed(attendee.menuItemIds, menu) * partySize(attendee)
+  return personTotal(menuPart, attendee.extraAmount || 0)
+}
+
+export function attendeePaidTotal(attendee: Attendee): number {
+  if (attendee.isGroup && attendee.members?.length) {
+    const memberPaid = attendee.members.reduce(
+      (sum, m) => sum + Math.max(0, m.amountPaid || 0),
+      0,
+    )
+    return memberPaid + legacyUnallocatedPaid(attendee)
+  }
+  return Math.max(0, attendee.amountPaid || 0)
+}
+
+export function attendeeRemaining(attendee: Attendee, menu: MenuItem[]): number {
+  return Math.max(0, attendeeTotal(attendee, menu) - attendeePaidTotal(attendee))
+}
+
+export function attendeeSettled(attendee: Attendee, menu: MenuItem[]): boolean {
+  return attendeeRemaining(attendee, menu) <= 0.001
 }
 
 export function gatheringTotals(gathering: Gathering) {
@@ -134,7 +194,7 @@ export function gatheringTotals(gathering: Gathering) {
     (sum, a) => sum + attendeeTotal(a, gathering.menu),
     0,
   )
-  const paid = gathering.attendees.reduce((sum, a) => sum + a.amountPaid, 0)
+  const paid = gathering.attendees.reduce((sum, a) => sum + attendeePaidTotal(a), 0)
   const outstanding = Math.max(0, owed - paid)
   const guestCount = gathering.attendees.reduce((sum, a) => sum + partySize(a), 0)
   const inviteCount = gathering.attendees.length

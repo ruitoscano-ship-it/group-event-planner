@@ -23,6 +23,8 @@ export type GroupMember = {
   allergies: string
   menuRequest: string
   ageGroup: AgeGroup
+  extraAmount: number
+  amountPaid: number
 }
 
 export type Attendee = {
@@ -38,6 +40,7 @@ export type Attendee = {
   menuRequest: string
   ageGroup: AgeGroup
   amountPaid: number
+  extraAmount: number
   createdAt: string
   isGroup: boolean
   groupSize: number

@@ -30,6 +30,8 @@ function withCarteDefaults(m: GroupMember): GroupMember {
     carteItemIds: Array.isArray(m.carteItemIds) ? m.carteItemIds : [],
     menuRequest: m.menuRequest || '',
     ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
+    amountPaid: Math.max(0, Number(m.amountPaid) || 0),
+    extraAmount: Math.max(0, Number(m.extraAmount) || 0),
   }
 }
 
@@ -98,6 +100,8 @@ export function GuestEditor({
               menuRequest: m.menuRequest.trim(),
               carteItemIds: m.carteItemIds || [],
               ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
+              amountPaid: Math.max(0, Number(m.amountPaid) || 0),
+              extraAmount: Math.max(0, Number(m.extraAmount) || 0),
             }))
           : [],
         groupSize: draft.isGroup ? Math.max(1, members.length) : 1,

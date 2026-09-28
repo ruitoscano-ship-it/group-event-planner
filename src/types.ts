@@ -28,6 +28,10 @@ export type GroupMember = {
   /** Free-text extras beyond carte / fixed menu */
   menuRequest: string
   ageGroup: AgeGroup
+  /** Manual extras (€) beyond set-menu price — organizer billing. */
+  extraAmount: number
+  /** Amount paid for this person — organizer billing. */
+  amountPaid: number
 }
 
 export type Attendee = {
@@ -43,6 +47,8 @@ export type Attendee = {
   menuRequest: string
   ageGroup: AgeGroup
   amountPaid: number
+  /** Manual extras (€) for individuals — ignored when group has members. */
+  extraAmount: number
   createdAt: string
   isGroup: boolean
   groupSize: number

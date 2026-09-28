@@ -28,8 +28,12 @@ import type {
   MessageInput,
 } from '../types'
 
-type AddAttendeeInput = Omit<Attendee, 'id' | 'createdAt' | 'amountPaid'> & {
+type AddAttendeeInput = Omit<
+  Attendee,
+  'id' | 'createdAt' | 'amountPaid' | 'extraAmount'
+> & {
   amountPaid?: number
+  extraAmount?: number
   guestKey?: string
 }
 

@@ -11,19 +11,16 @@ import { MenuOrderField } from '../components/MenuOrderField'
 import { MenuPicker } from '../components/MenuPicker'
 import { MenuSheet } from '../components/MenuSheet'
 import { PartyKindPicker, type PartyKind } from '../components/PartyKindPicker'
+import { PaymentBoard } from '../components/PaymentBoard'
 import { useI18n } from '../i18n/I18nContext'
 import {
-  attendeeTotal,
   compressImageFile,
   createMemberDraft,
   formatDate,
   formatMoney,
   gatheringTotals,
   idsHaveAlaCarte,
-  personOrderLabel,
-  partySize,
   resizeMembers,
-  selectionHasAlaCarte,
   toggleMenuSelection,
   unitPriceForIds,
 } from '../lib/money'
@@ -1699,100 +1696,12 @@ export function EventPage() {
         <section className="panel">
           <h2>{t('paymentTracking')}</h2>
           <p className="sub">{t('paymentTrackingSub')}</p>
-          {gathering.attendees.length === 0 ? (
-            <div className="empty">{t('noGuestsToBill')}</div>
-          ) : (
-            <div className="guest-list">
-              {gathering.attendees.map((a) => {
-                const owed = attendeeTotal(a, gathering.menu)
-                const remaining = Math.max(0, owed - a.amountPaid)
-                const settled = remaining <= 0.001 && !selectionHasAlaCarte(a, gathering.menu)
-                return (
-                  <div key={a.id} className="guest-row">
-                    <div>
-                      <h4>{a.name}</h4>
-                      <p>
-                        {a.isGroup && a.members?.length
-                          ? a.members
-                              .map(
-                                (m) =>
-                                  `${m.name}: ${personOrderLabel(
-                                    m.menuItemIds,
-                                    m.carteItemIds || [],
-                                    m.menuRequest || '',
-                                    gathering,
-                                    t('noSelection'),
-                                  )}`,
-                              )
-                              .join(' · ')
-                          : personOrderLabel(
-                              a.menuItemIds,
-                              a.carteItemIds || [],
-                              a.menuRequest || '',
-                              gathering,
-                              t('noSelection'),
-                            )}
-                        {a.isGroup ? ` · ${t('groupBadge', { count: partySize(a) })}` : ''}
-                      </p>
-                      <div className="guest-meta">
-                        <span className="chip chip-muted">
-                          {t('owes', {
-                            amount: formatMoney(owed, gathering.currency, localeTag),
-                          })}
-                        </span>
-                        {selectionHasAlaCarte(a, gathering.menu) && (
-                          <span className="chip chip-warm">{t('priceVariable')}</span>
-                        )}
-                        <span className={`chip ${settled ? '' : 'chip-warm'}`}>
-                          {settled
-                            ? t('paidInFull')
-                            : t('dueAmount', {
-                                amount: formatMoney(remaining, gathering.currency, localeTag),
-                              })}
-                        </span>
-                      </div>
-                      <div className="money-inputs">
-                        <label>
-                          {t('amountPaid')}
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={a.amountPaid}
-                            onChange={(e) =>
-                              void updateAttendee(gathering.id, a.id, {
-                                amountPaid: Number(e.target.value) || 0,
-                              })
-                            }
-                          />
-                        </label>
-                        <div className="row-actions">
-                          <button
-                            className="btn btn-sm btn-accent"
-                            type="button"
-                            onClick={() =>
-                              void updateAttendee(gathering.id, a.id, { amountPaid: owed })
-                            }
-                          >
-                            {t('markPaid')}
-                          </button>
-                          <button
-                            className="btn btn-sm btn-ghost"
-                            type="button"
-                            onClick={() =>
-                              void updateAttendee(gathering.id, a.id, { amountPaid: 0 })
-                            }
-                          >
-                            {t('reset')}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          <PaymentBoard
+            gathering={gathering}
+            onUpdateAttendee={(attendeeId, patch) =>
+              updateAttendee(gathering.id, attendeeId, patch)
+            }
+          />
         </section>
       )}
         </>

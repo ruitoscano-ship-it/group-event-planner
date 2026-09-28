@@ -753,6 +753,19 @@ body[data-demo-open='1'] .rsvp-sticky {
   border: 1px solid rgba(0, 107, 95, 0.18);
 }
 
+button.chip {
+  border: 1.5px solid transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+button.chip.selected {
+  background: var(--green-soft);
+  color: var(--green-deep);
+  border-color: rgba(0, 107, 95, 0.35);
+  box-shadow: 0 0 0 1px rgba(0, 163, 143, 0.15);
+}
+
 .event-tile h3 {
   margin: 0;
   font-size: 1.35rem;
@@ -1454,6 +1467,103 @@ textarea {
 
 .money-inputs label {
   margin: 0;
+}
+
+.payment-board {
+  display: grid;
+  gap: 1rem;
+}
+
+.payment-filters {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.payment-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.payment-filter-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  margin-right: 0.15rem;
+}
+
+.payment-filter-chip {
+  min-height: 2rem;
+}
+
+.payment-list {
+  margin-top: 0.25rem;
+}
+
+.payment-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.65rem;
+  align-items: flex-start;
+}
+
+.payment-unallocated {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin: 0.75rem 0;
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+
+.payment-unallocated p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #5a3208;
+}
+
+.payment-members {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+}
+
+.payment-member h5 {
+  margin: 0 0 0.2rem;
+  font-size: 1rem;
+}
+
+.payment-member p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.payment-extras-hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.82rem;
+  color: #7a4a12;
+}
+
+.payment-money {
+  grid-template-columns: 1fr 1fr auto;
+}
+
+@media (max-width: 640px) {
+  .payment-money {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .payment-money .row-actions {
+    grid-column: 1 / -1;
+  }
 }
 
 .share-box {

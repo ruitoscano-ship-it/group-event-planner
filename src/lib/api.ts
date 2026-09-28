@@ -160,8 +160,9 @@ export const api = {
   },
   addAttendee(
     gatheringId: string,
-    attendee: Omit<Attendee, 'id' | 'createdAt' | 'amountPaid'> & {
+    attendee: Omit<Attendee, 'id' | 'createdAt' | 'amountPaid' | 'extraAmount'> & {
       amountPaid?: number
+      extraAmount?: number
       guestKey?: string
     },
     options?: { asGuest?: boolean; organizerCode?: string | null },

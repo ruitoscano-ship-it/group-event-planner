@@ -171,6 +171,7 @@ type PublicAttendee = Pick<
   carteItemIds?: undefined
   menuRequest?: undefined
   amountPaid?: undefined
+  extraAmount?: undefined
   registeredBy?: undefined
   guestKey?: undefined
 }
@@ -260,6 +261,8 @@ function normalizeGathering(raw: Gathering & { menuOcrLines?: string[] }): Gathe
             allergies: clip(m.allergies, MAX_TEXT),
             menuRequest: clip(m.menuRequest, MAX_NOTES),
             ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
+            amountPaid: Math.max(0, Number(m.amountPaid) || 0),
+            extraAmount: Math.max(0, Number(m.extraAmount) || 0),
           }))
         : []
       const isGroup = Boolean(a.isGroup)
@@ -276,6 +279,7 @@ function normalizeGathering(raw: Gathering & { menuOcrLines?: string[] }): Gathe
         menuItemIds: Array.isArray(a.menuItemIds) ? a.menuItemIds.slice(0, 40) : [],
         ageGroup: a.ageGroup === 'child' ? 'child' : 'adult',
         amountPaid: Math.max(0, Number(a.amountPaid) || 0),
+        extraAmount: Math.max(0, Number(a.extraAmount) || 0),
         guestKey: a.guestKey || '',
         isGroup,
         members,
@@ -496,6 +500,26 @@ function normalizeMembers(
       allergies: clip(row.allergies, MAX_TEXT),
       menuRequest: clip(row.menuRequest, MAX_NOTES),
       ageGroup: row.ageGroup === 'child' ? 'child' : 'adult',
+      amountPaid: Math.max(0, Number(row.amountPaid) || 0),
+      extraAmount: Math.max(0, Number(row.extraAmount) || 0),
+    }
+  })
+}
+
+/** Keep billing fields when guests update RSVP menus without sending payments. */
+function preserveMemberBilling(
+  next: Attendee['members'],
+  previous: Attendee['members'] | undefined,
+): Attendee['members'] {
+  if (!previous?.length) return next
+  const byId = new Map(previous.map((m) => [m.id, m]))
+  return next.map((m) => {
+    const prev = byId.get(m.id)
+    if (!prev) return m
+    return {
+      ...m,
+      amountPaid: Math.max(0, Number(prev.amountPaid) || 0),
+      extraAmount: Math.max(0, Number(prev.extraAmount) || 0),
     }
   })
 }
@@ -891,8 +915,8 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const email = normalizeEmail(body.email || '')
 
     const isGroup = Boolean(body.isGroup)
-    const members = isGroup ? normalizeMembers(body.members) : []
-    if (isGroup && members.length === 0) {
+    const membersRaw = isGroup ? normalizeMembers(body.members) : []
+    if (isGroup && membersRaw.length === 0) {
       return error('Add at least one group member with a menu choice')
     }
     if (!asOrganizer && gathering.attendees.length >= MAX_ATTENDEES) {
@@ -917,6 +941,9 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
         )
       }
       const guestKey = current.guestKey || newGuestKey()
+      const members = asOrganizer
+        ? membersRaw
+        : preserveMemberBilling(membersRaw, current.members)
       gathering.attendees[existingIdx] = {
         ...current,
         name: clip(body.name, MAX_NAME),
@@ -938,6 +965,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
         menuRequest: isGroup ? '' : clip(body.menuRequest, MAX_NOTES),
         ageGroup: isGroup ? 'adult' : body.ageGroup === 'child' ? 'child' : 'adult',
         amountPaid: current.amountPaid,
+        extraAmount: current.extraAmount || 0,
         guestKey,
         isGroup,
         members,
@@ -953,6 +981,9 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     }
 
     const guestKey = newGuestKey()
+    const members = asOrganizer
+      ? membersRaw
+      : membersRaw.map((m) => ({ ...m, amountPaid: 0, extraAmount: 0 }))
     const attendee: Attendee = {
       id: newId('guest'),
       name: clip(body.name, MAX_NAME),
@@ -974,6 +1005,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       menuRequest: isGroup ? '' : clip(body.menuRequest, MAX_NOTES),
       ageGroup: isGroup ? 'adult' : body.ageGroup === 'child' ? 'child' : 'adult',
       amountPaid: asOrganizer ? Math.max(0, Number(body.amountPaid) || 0) : 0,
+      extraAmount: asOrganizer ? Math.max(0, Number(body.extraAmount) || 0) : 0,
       guestKey,
       createdAt: new Date().toISOString(),
       isGroup,
@@ -1025,6 +1057,24 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
         body.members !== undefined ? normalizeMembers(body.members) : current.members || []
       const isGroup =
         body.isGroup !== undefined ? Boolean(body.isGroup) : current.isGroup
+      const nextExtra =
+        body.extraAmount !== undefined
+          ? Math.max(0, Number(body.extraAmount) || 0)
+          : current.extraAmount || 0
+      const nextPaid =
+        body.amountPaid !== undefined
+          ? Math.max(0, Number(body.amountPaid) || 0)
+          : current.amountPaid
+      const membersHavePaid =
+        isGroup && members.some((m) => (m.amountPaid || 0) > 0)
+      const parentPaid =
+        isGroup && members.length > 0
+          ? body.amountPaid !== undefined
+            ? nextPaid
+            : membersHavePaid
+              ? 0
+              : current.amountPaid
+          : nextPaid
       gathering.attendees[idx] = {
         ...current,
         name: body.name !== undefined ? clip(body.name, MAX_NAME) : current.name,
@@ -1063,10 +1113,8 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
               ? 'child'
               : 'adult'
             : current.ageGroup || 'adult',
-        amountPaid:
-          body.amountPaid !== undefined
-            ? Math.max(0, Number(body.amountPaid) || 0)
-            : current.amountPaid,
+        amountPaid: parentPaid,
+        extraAmount: isGroup && members.length > 0 ? 0 : nextExtra,
         guestKey: current.guestKey || newGuestKey(),
         id: attendeeId,
         isGroup,
