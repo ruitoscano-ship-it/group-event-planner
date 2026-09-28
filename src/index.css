@@ -1885,19 +1885,25 @@ textarea {
 
   .topbar {
     border-radius: 18px;
-    padding: 0.5rem 0.6rem;
+    padding: 0.55rem 0.7rem;
     margin-bottom: 1rem;
-    align-items: center;
-    gap: 0.45rem;
+    align-items: stretch;
+    gap: 0.5rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .brand {
     font-size: 1.2rem;
+    justify-self: start;
   }
 
   .nav-actions {
-    gap: 0.3rem;
-    justify-content: flex-end;
+    gap: 0.4rem;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    width: 100%;
+    max-width: none;
   }
 
   .panel {
@@ -2144,15 +2150,42 @@ textarea {
 
   .topbar {
     border-radius: 20px;
-    align-items: center;
-    gap: 0.55rem;
-    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.6rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.65rem 0.8rem;
   }
 
-  .nav-actions {
+  .topbar .brand {
+    justify-self: start;
+    padding-left: 0.15rem;
+  }
+
+  .topbar .nav-actions {
+    width: 100%;
     max-width: none;
-    flex: 1 1 auto;
-    justify-content: flex-end;
+    flex: none;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.45rem;
+  }
+
+  .topbar .nav-actions .lang-switch {
+    flex-shrink: 0;
+  }
+
+  .topbar .nav-actions > .btn-sm:not(.btn-danger) {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 0.55rem;
+    white-space: nowrap;
+  }
+
+  .topbar .nav-actions > .btn-danger {
+    flex-shrink: 0;
   }
 
   .topbar-secondary {
