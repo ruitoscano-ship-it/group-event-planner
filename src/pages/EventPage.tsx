@@ -44,7 +44,7 @@ import {
 import { useGatherings } from '../store/GatheringsContext'
 import type { AgeGroup, GroupMember } from '../types'
 
-type Tab = 'menu' | 'guests' | 'payments' | 'inbox'
+type Tab = 'guests' | 'payments' | 'inbox'
 
 export function EventPage() {
   const { eventId = '' } = useParams()
@@ -73,7 +73,7 @@ export function EventPage() {
   const gathering = getGathering(eventId)
   const [fetching, setFetching] = useState(!gathering)
   const [notFound, setNotFound] = useState(false)
-  const [tab, setTab] = useState<Tab>('menu')
+  const [tab, setTab] = useState<Tab>('guests')
   const [copied, setCopied] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -89,7 +89,7 @@ export function EventPage() {
   const [coachStep, setCoachStep] = useState<CoachStep | null>(null)
   const [showGuestForm, setShowGuestForm] = useState(false)
   const [guestPartyKind, setGuestPartyKind] = useState<PartyKind | null>(null)
-  const shareBoxRef = useRef<HTMLDivElement | null>(null)
+  const shareBoxRef = useRef<HTMLElement | null>(null)
   const codePanelRef = useRef<HTMLElement | null>(null)
   const menuFocusRef = useRef<HTMLDivElement | null>(null)
   const canManage = hasOrganizerAccess(eventId)
@@ -176,7 +176,6 @@ export function EventPage() {
 
   useEffect(() => {
     if (!canManage || !coachStep) return
-    if (coachStep === 'menu') setTab('menu')
 
     let cancelled = false
     let attempts = 0
@@ -652,16 +651,22 @@ export function EventPage() {
   }
 
   const guided = Boolean(coachStep && coachStep !== 'done')
-  const showDetails = !guided
   const showMetrics = !guided
   const showCodePanel = !guided || coachStep === 'code'
-  const showTabs = !guided || coachStep === 'menu'
+  const showSetupDetails = !guided
+  const showSetupMenu = !guided || coachStep === 'menu'
+  const showSetupShare = !guided || coachStep === 'share' || coachStep === 'done'
+  const showTabs = !guided
   const tabOptions = [
-    ['menu', 'tabMenu'],
     ['guests', 'tabGuests'],
     ['payments', 'tabPayments'],
     ['inbox', 'tabInbox'],
   ] as const
+  const step1Done = Boolean(gathering.date && gathering.location)
+  const step2Done = Boolean(
+    gathering.menuCardUrl || (gathering.carteItems || []).length > 0,
+  )
+  const step3Done = gathering.menu.length > 0
 
   return (
     <>
@@ -685,7 +690,7 @@ export function EventPage() {
                 }
                 resetAssistedMode()
                 setCoachStep('code')
-                setTab('menu')
+                setTab('guests')
               }}
             >
               {coachStep ? t('demoExit') : t('demoStart')}
@@ -732,31 +737,6 @@ export function EventPage() {
           )}
         </div>
 
-        <div
-          className={`event-stage-share ${coachStep === 'share' || coachStep === 'done' ? 'coach-target' : ''}`}
-          ref={shareBoxRef}
-        >
-          {(coachStep === 'share' || coachStep === 'done') && (
-            <p className="demo-inline-tip">{t('demoTipShare')}</p>
-          )}
-          <div className="event-stage-share-label">
-            <strong>{t('selfServiceLink')}</strong>
-            <p className="event-stage-share-hint">{t('selfServiceLinkHint')}</p>
-            <code>{rsvpUrl}</code>
-          </div>
-          <div className="event-stage-share-actions">
-            <button className="btn btn-sm btn-accent" type="button" onClick={() => void copyLink()}>
-              {copied ? t('copied') : t('copyInviteLink')}
-            </button>
-            <Link viewTransition className="btn btn-sm btn-ghost" to={`/rsvp/${gathering.id}`}>
-              {t('previewRsvp')}
-            </Link>
-            <button className="btn btn-sm btn-ghost" type="button" onClick={openFullReport}>
-              {t('openEventReport')}
-            </button>
-          </div>
-        </div>
-
         {showMetrics && (
           <div className="event-stage-metrics" aria-label={t('peopleTotal')}>
             <div>
@@ -779,150 +759,551 @@ export function EventPage() {
         )}
       </section>
 
-      {showDetails && (
-        <section className="panel event-details-panel" style={{ marginBottom: '1rem' }}>
-          <div className="details-panel-head">
-            <div>
-              <h2>{t('editDetails')}</h2>
-              <p className="sub">{t('editDetailsSub')}</p>
-            </div>
-            {!editingDetails ? (
-              <button
-                type="button"
-                className="btn btn-accent btn-sm"
-                onClick={() => {
-                  setEditingDetails(true)
-                  setDetailsMsg(null)
-                  setDetailsError(false)
-                }}
-              >
-                {t('editGuest')}
-              </button>
-            ) : (
-              <span className="chip chip-warm">{t('editingLabel')}</span>
-            )}
-          </div>
-          {detailsMsg && (
+      {(showSetupDetails || showSetupMenu || showSetupShare) && (
+        <div className="organizer-setup">
+          {!guided && (
+            <>
+              <nav className="setup-flow-map" aria-label={t('setupFlowMapLabel')}>
+                {(
+                  [
+                    {
+                      id: 'setup-step-1',
+                      n: 1,
+                      label: t('setupStep1Short'),
+                      done: step1Done,
+                    },
+                    {
+                      id: 'setup-step-2',
+                      n: 2,
+                      label: t('setupStep2Short'),
+                      done: step2Done,
+                      optional: true,
+                    },
+                    {
+                      id: 'setup-step-3',
+                      n: 3,
+                      label: t('setupStep3Short'),
+                      done: step3Done,
+                    },
+                    {
+                      id: 'setup-step-4',
+                      n: 4,
+                      label: t('setupStep4Short'),
+                      done: false,
+                    },
+                  ] as const
+                ).map((step, i, arr) => (
+                  <div key={step.id} className="setup-flow-map-item">
+                    <button
+                      type="button"
+                      className={`setup-flow-map-step ${step.done ? 'done' : ''}`}
+                      onClick={() => {
+                        document
+                          .getElementById(step.id)
+                          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                      }}
+                    >
+                      <span className="setup-flow-map-num" aria-hidden>
+                        {step.n}
+                      </span>
+                      <span className="setup-flow-map-label">
+                        {step.label}
+                        {'optional' in step && step.optional ? (
+                          <em>{t('setupStepOptional')}</em>
+                        ) : null}
+                      </span>
+                    </button>
+                    {i < arr.length - 1 && (
+                      <span className="setup-flow-map-arrow" aria-hidden>
+                        →
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </nav>
+              <div className="organizer-setup-intro">
+                <h2>{t('setupFlowTitle')}</h2>
+                <p className="sub">{t('setupFlowSub')}</p>
+              </div>
+            </>
+          )}
+
+          {showSetupDetails && (
+            <section id="setup-step-1" className="panel setup-step">
+              <div className="setup-step-head">
+                <span className={`setup-step-num ${step1Done ? 'done' : ''}`} aria-hidden>
+                  1
+                </span>
+                <div className="setup-step-copy">
+                  <h2>{t('setupStep1')}</h2>
+                  <p className="sub">{t('setupStep1Sub')}</p>
+                </div>
+                {step1Done && <span className="chip">{t('setupStepDone')}</span>}
+                {!editingDetails ? (
+                  <button
+                    type="button"
+                    className="btn btn-accent btn-sm"
+                    onClick={() => {
+                      setEditingDetails(true)
+                      setDetailsMsg(null)
+                      setDetailsError(false)
+                    }}
+                  >
+                    {t('editGuest')}
+                  </button>
+                ) : (
+                  <span className="chip chip-warm">{t('editingLabel')}</span>
+                )}
+              </div>
+              {detailsMsg && (
+                <div
+                  className={`feedback-banner ${detailsError ? 'error' : ''}`}
+                  role="status"
+                >
+                  {detailsMsg}
+                </div>
+              )}
+
+              {!editingDetails ? (
+                <dl className="details-summary">
+                  <div>
+                    <dt>{t('date')}</dt>
+                    <dd>
+                      {gathering.date
+                        ? formatDate(gathering.date, localeTag, t('dateTbd'))
+                        : t('dateTbd')}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{t('time')}</dt>
+                    <dd>{gathering.time || '—'}</dd>
+                  </div>
+                  <div className="full">
+                    <dt>{t('location')}</dt>
+                    <dd>{gathering.location || t('locationTbd')}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('organizerName')}</dt>
+                    <dd>{gathering.organizerName || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('organizerEmail')}</dt>
+                    <dd>{gathering.organizerEmail || '—'}</dd>
+                  </div>
+                  <div className="full">
+                    <dt>{t('organizerPhone')}</dt>
+                    <dd>{gathering.organizerPhone || '—'}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <form onSubmit={(e) => void onSaveDetails(e)}>
+                  <div className="form-grid">
+                    <label>
+                      {t('date')}
+                      <input
+                        type="date"
+                        value={detailsForm.date}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, date: e.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      {t('time')}
+                      <input
+                        type="time"
+                        value={detailsForm.time}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, time: e.target.value })
+                        }
+                      />
+                    </label>
+                    <label className="full">
+                      {t('location')}
+                      <input
+                        value={detailsForm.location}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, location: e.target.value })
+                        }
+                        placeholder={t('placeholderLocation')}
+                      />
+                    </label>
+                    <label>
+                      {t('organizerName')}
+                      <input
+                        value={detailsForm.organizerName}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, organizerName: e.target.value })
+                        }
+                        placeholder={t('organizerNamePlaceholder')}
+                        autoComplete="name"
+                      />
+                    </label>
+                    <label>
+                      {t('organizerEmail')}
+                      <input
+                        type="email"
+                        value={detailsForm.organizerEmail}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, organizerEmail: e.target.value })
+                        }
+                        placeholder={t('placeholderEmail')}
+                        autoComplete="email"
+                      />
+                    </label>
+                    <label className="full">
+                      {t('organizerPhone')}
+                      <input
+                        type="tel"
+                        value={detailsForm.organizerPhone}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, organizerPhone: e.target.value })
+                        }
+                        placeholder={t('placeholderPhone')}
+                        autoComplete="tel"
+                      />
+                    </label>
+                  </div>
+                  <div className="form-actions">
+                    <button className="btn btn-accent" type="submit" disabled={detailsBusy}>
+                      {detailsBusy ? t('saving') : t('saveDetails')}
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      type="button"
+                      onClick={cancelEditDetails}
+                      disabled={detailsBusy}
+                    >
+                      {t('cancel')}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </section>
+          )}
+
+          {showSetupMenu && (
             <div
-              className={`feedback-banner ${detailsError ? 'error' : ''}`}
-              role="status"
+              ref={menuFocusRef}
+              className={`setup-menu-block ${coachStep === 'menu' ? 'coach-target' : ''}`}
             >
-              {detailsMsg}
+              {coachStep === 'menu' && (
+                <p className="demo-inline-tip">{t('demoTipMenu')}</p>
+              )}
+
+              <section id="setup-step-2" className="panel setup-step">
+                <div className="setup-step-head">
+                  <span className={`setup-step-num ${step2Done ? 'done' : ''}`} aria-hidden>
+                    2
+                  </span>
+                  <div className="setup-step-copy">
+                    <h2>{t('setupStep2')}</h2>
+                    <p className="sub">{t('setupStep2Sub')}</p>
+                  </div>
+                  <span className="chip chip-muted">{t('setupStepOptional')}</span>
+                  {step2Done && <span className="chip">{t('setupStepDone')}</span>}
+                </div>
+                <ImageUploadDropzone
+                  busy={cardBusy}
+                  onFile={(file) => void onUploadCard(file)}
+                />
+                <details className="menu-card-link-fold">
+                  <summary>{t('menuCardOrLink')}</summary>
+                  <label className="full">
+                    {t('menuCardLink')}
+                    <input
+                      value={cardLink}
+                      onChange={(e) => setCardLink(e.target.value)}
+                      placeholder={t('menuCardLinkPlaceholder')}
+                    />
+                  </label>
+                  <div className="form-actions" style={{ marginTop: '0.65rem' }}>
+                    <button
+                      className="btn btn-accent"
+                      type="button"
+                      disabled={cardBusy || !cardLink.trim()}
+                      onClick={() => void saveCardLink()}
+                    >
+                      {cardBusy ? t('menuCardUploading') : t('menuCardSave')}
+                    </button>
+                  </div>
+                </details>
+                {cardMsg && (
+                  <div className="feedback-banner" role="status" style={{ marginTop: '0.75rem' }}>
+                    {cardMsg}
+                  </div>
+                )}
+                {safeMediaUrl(gathering.menuCardUrl) && (
+                  <div className="menu-card-preview">
+                    <img src={safeMediaUrl(gathering.menuCardUrl)} alt={t('menuCard')} />
+                    <div className="menu-card-preview-actions">
+                      {!safeMediaUrl(gathering.menuCardUrl).startsWith('data:') && (
+                        <a
+                          className="btn btn-ghost btn-sm"
+                          href={safeMediaUrl(gathering.menuCardUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {t('menuCardOpen')}
+                        </a>
+                      )}
+                      <button
+                        className="btn btn-danger btn-sm"
+                        type="button"
+                        disabled={cardBusy}
+                        onClick={() => void clearMenuCard()}
+                      >
+                        {t('menuCardClear')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {!safeMediaUrl(gathering.menuCardUrl) && gathering.menuCardUrl && (
+                  <div className="form-actions" style={{ marginTop: '0.75rem' }}>
+                    <button
+                      className="btn btn-danger btn-sm"
+                      type="button"
+                      disabled={cardBusy}
+                      onClick={() => void clearMenuCard()}
+                    >
+                      {t('menuCardClear')}
+                    </button>
+                  </div>
+                )}
+              </section>
+
+              <EventCarteEditor
+                gathering={gathering}
+                onSave={(items, approved) => setMenuCarte(gathering.id, items, approved)}
+              />
+
+              <div className="layout-split setup-step-options">
+                <section id="setup-step-3" className="panel setup-step">
+                  <div className="setup-step-head">
+                    <span className={`setup-step-num ${step3Done ? 'done' : ''}`} aria-hidden>
+                      3
+                    </span>
+                    <div className="setup-step-copy">
+                      <h2>{t('setupStep3')}</h2>
+                      <p className="sub">{t('setupStep3Sub')}</p>
+                    </div>
+                    {step3Done && <span className="chip">{t('setupStepDone')}</span>}
+                  </div>
+                  {menuMsg && (
+                    <div className="feedback-banner" role="status">
+                      {menuMsg}
+                    </div>
+                  )}
+                  <form onSubmit={(e) => void onAddMenu(e)}>
+                    <div className="menu-kind" role="group" aria-label={t('menuKindLabel')}>
+                      <button
+                        type="button"
+                        className={`menu-kind-option ${menuForm.kind === 'set' ? 'selected' : ''}`}
+                        aria-pressed={menuForm.kind === 'set'}
+                        onClick={() => setMenuForm({ ...menuForm, kind: 'set' })}
+                      >
+                        <strong>{t('setMenu')}</strong>
+                        <span>{t('setMenuSub')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`menu-kind-option ${menuForm.kind === 'alacarte' ? 'selected' : ''}`}
+                        aria-pressed={menuForm.kind === 'alacarte'}
+                        onClick={() =>
+                          setMenuForm({
+                            ...menuForm,
+                            kind: 'alacarte',
+                            price: '',
+                            exclusions: '',
+                          })
+                        }
+                      >
+                        <strong>{t('alaCarte')}</strong>
+                        <span>{t('alaCarteHint')}</span>
+                      </button>
+                    </div>
+
+                    <div className="form-grid">
+                      <label className="full">
+                        {menuForm.kind === 'set' ? t('setMenuName') : t('alaCarteName')}
+                        <input
+                          required
+                          value={menuForm.name}
+                          onChange={(e) => setMenuForm({ ...menuForm, name: e.target.value })}
+                          placeholder={
+                            menuForm.kind === 'set'
+                              ? t('setMenuNamePlaceholder')
+                              : t('alaCarteNamePlaceholder')
+                          }
+                        />
+                      </label>
+
+                      {menuForm.kind === 'set' ? (
+                        <>
+                          <label className="full">
+                            {t('pricePerPerson')} ({gathering.currency})
+                            <input
+                              required
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={menuForm.price}
+                              onChange={(e) =>
+                                setMenuForm({ ...menuForm, price: e.target.value })
+                              }
+                              placeholder="25.00"
+                            />
+                          </label>
+                          <label className="full">
+                            {t('setMenuIncludes')}
+                            <textarea
+                              value={menuForm.description}
+                              onChange={(e) =>
+                                setMenuForm({ ...menuForm, description: e.target.value })
+                              }
+                              placeholder={t('setMenuIncludesPlaceholder')}
+                              rows={3}
+                            />
+                          </label>
+                          <label className="full">
+                            {t('setMenuExclusions')}
+                            <textarea
+                              value={menuForm.exclusions}
+                              onChange={(e) =>
+                                setMenuForm({ ...menuForm, exclusions: e.target.value })
+                              }
+                              placeholder={t('setMenuExclusionsPlaceholder')}
+                              rows={2}
+                            />
+                          </label>
+                        </>
+                      ) : (
+                        <label className="full">
+                          {t('description')}
+                          <textarea
+                            value={menuForm.description}
+                            onChange={(e) =>
+                              setMenuForm({ ...menuForm, description: e.target.value })
+                            }
+                            placeholder={t('alaCarteDescPlaceholder')}
+                            rows={2}
+                          />
+                        </label>
+                      )}
+                    </div>
+                    <div className="form-actions">
+                      <button className="btn btn-accent" type="submit" disabled={busy}>
+                        {busy ? t('adding') : t('addToMenu')}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+
+                <section className="panel setup-step">
+                  <h2>{t('currentMenu')}</h2>
+                  <p className="sub">{t('optionsAvailable', { count: gathering.menu.length })}</p>
+                  {gathering.menu.length === 0 ? (
+                    <div className="empty">{t('addOptionBeforeShare')}</div>
+                  ) : (
+                    <div className="menu-list">
+                      {gathering.menu.map((item) => (
+                        <div key={item.id} className="menu-row">
+                          <div>
+                            <span className="chip chip-muted">
+                              {item.isAlaCarte ? t('alaCarte') : t('setMenu')}
+                            </span>
+                            <h4>{item.name}</h4>
+                            {item.description && (
+                              <p>
+                                <strong>
+                                  {item.isAlaCarte ? '' : `${t('setMenuIncludes')}: `}
+                                </strong>
+                                {item.description}
+                              </p>
+                            )}
+                            {!item.isAlaCarte && item.exclusions && (
+                              <p className="menu-exclusions">
+                                <strong>{t('setMenuExclusions')}: </strong>
+                                {item.exclusions}
+                              </p>
+                            )}
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div className="price">
+                              {item.isAlaCarte
+                                ? t('priceVariable')
+                                : formatMoney(item.price, gathering.currency, localeTag)}
+                            </div>
+                            <div className="row-actions">
+                              <button
+                                className="btn btn-danger btn-sm"
+                                type="button"
+                                onClick={() => void removeMenuItem(gathering.id, item.id)}
+                              >
+                                {t('remove')}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
             </div>
           )}
 
-          {!editingDetails ? (
-            <dl className="details-summary">
-              <div>
-                <dt>{t('date')}</dt>
-                <dd>
-                  {gathering.date
-                    ? formatDate(gathering.date, localeTag, t('dateTbd'))
-                    : t('dateTbd')}
-                </dd>
+          {showSetupShare && (
+            <section
+              id="setup-step-4"
+              className={`panel setup-step ${coachStep === 'share' || coachStep === 'done' ? 'coach-target' : ''}`}
+              ref={shareBoxRef}
+            >
+              {(coachStep === 'share' || coachStep === 'done') && (
+                <p className="demo-inline-tip">{t('demoTipShare')}</p>
+              )}
+              <div className="setup-step-head">
+                <span className="setup-step-num" aria-hidden>
+                  4
+                </span>
+                <div className="setup-step-copy">
+                  <h2>{t('setupStep4')}</h2>
+                  <p className="sub">{t('setupStep4Sub')}</p>
+                </div>
               </div>
-              <div>
-                <dt>{t('time')}</dt>
-                <dd>{gathering.time || '—'}</dd>
+              <div className="setup-share">
+                <div className="setup-share-label">
+                  <strong>{t('selfServiceLink')}</strong>
+                  <p className="setup-share-hint">{t('selfServiceLinkHint')}</p>
+                  <code>{rsvpUrl}</code>
+                </div>
+                <div className="setup-share-actions">
+                  <button
+                    className="btn btn-sm btn-accent"
+                    type="button"
+                    onClick={() => void copyLink()}
+                  >
+                    {copied ? t('copied') : t('copyInviteLink')}
+                  </button>
+                  <Link
+                    viewTransition
+                    className="btn btn-sm btn-ghost"
+                    to={`/rsvp/${gathering.id}`}
+                  >
+                    {t('previewRsvp')}
+                  </Link>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    type="button"
+                    onClick={openFullReport}
+                  >
+                    {t('openEventReport')}
+                  </button>
+                </div>
               </div>
-              <div className="full">
-                <dt>{t('location')}</dt>
-                <dd>{gathering.location || t('locationTbd')}</dd>
-              </div>
-              <div>
-                <dt>{t('organizerName')}</dt>
-                <dd>{gathering.organizerName || '—'}</dd>
-              </div>
-              <div>
-                <dt>{t('organizerEmail')}</dt>
-                <dd>{gathering.organizerEmail || '—'}</dd>
-              </div>
-              <div className="full">
-                <dt>{t('organizerPhone')}</dt>
-                <dd>{gathering.organizerPhone || '—'}</dd>
-              </div>
-            </dl>
-          ) : (
-            <form onSubmit={(e) => void onSaveDetails(e)}>
-              <div className="form-grid">
-                <label>
-                  {t('date')}
-                  <input
-                    type="date"
-                    value={detailsForm.date}
-                    onChange={(e) => setDetailsForm({ ...detailsForm, date: e.target.value })}
-                  />
-                </label>
-                <label>
-                  {t('time')}
-                  <input
-                    type="time"
-                    value={detailsForm.time}
-                    onChange={(e) => setDetailsForm({ ...detailsForm, time: e.target.value })}
-                  />
-                </label>
-                <label className="full">
-                  {t('location')}
-                  <input
-                    value={detailsForm.location}
-                    onChange={(e) =>
-                      setDetailsForm({ ...detailsForm, location: e.target.value })
-                    }
-                    placeholder={t('placeholderLocation')}
-                  />
-                </label>
-                <label>
-                  {t('organizerName')}
-                  <input
-                    value={detailsForm.organizerName}
-                    onChange={(e) =>
-                      setDetailsForm({ ...detailsForm, organizerName: e.target.value })
-                    }
-                    placeholder={t('organizerNamePlaceholder')}
-                    autoComplete="name"
-                  />
-                </label>
-                <label>
-                  {t('organizerEmail')}
-                  <input
-                    type="email"
-                    value={detailsForm.organizerEmail}
-                    onChange={(e) =>
-                      setDetailsForm({ ...detailsForm, organizerEmail: e.target.value })
-                    }
-                    placeholder={t('placeholderEmail')}
-                    autoComplete="email"
-                  />
-                </label>
-                <label className="full">
-                  {t('organizerPhone')}
-                  <input
-                    type="tel"
-                    value={detailsForm.organizerPhone}
-                    onChange={(e) =>
-                      setDetailsForm({ ...detailsForm, organizerPhone: e.target.value })
-                    }
-                    placeholder={t('placeholderPhone')}
-                    autoComplete="tel"
-                  />
-                </label>
-              </div>
-              <div className="form-actions">
-                <button className="btn btn-accent" type="submit" disabled={detailsBusy}>
-                  {detailsBusy ? t('saving') : t('saveDetails')}
-                </button>
-                <button
-                  className="btn btn-ghost"
-                  type="button"
-                  onClick={cancelEditDetails}
-                  disabled={detailsBusy}
-                >
-                  {t('cancel')}
-                </button>
-              </div>
-            </form>
+            </section>
           )}
-        </section>
+        </div>
       )}
 
       {showCodePanel && organizerCode && (
@@ -1027,13 +1408,11 @@ export function EventPage() {
 
       {showTabs && (
         <>
-      <div
-        ref={menuFocusRef}
-        className={`demo-menu-focus ${coachStep === 'menu' ? 'coach-target' : ''}`}
-      >
-      {coachStep === 'menu' && (
-        <p className="demo-inline-tip">{t('demoTipMenu')}</p>
-      )}
+      <div className="organizer-manage">
+        <div className="organizer-manage-intro">
+          <h2>{t('setupManageTitle')}</h2>
+          <p className="sub">{t('setupManageSub')}</p>
+        </div>
       <div className="tabs">
         {tabOptions.map(([key, label]) => (
           <button
@@ -1051,247 +1430,6 @@ export function EventPage() {
               )}
           </button>
         ))}
-      </div>
-
-      {tab === 'menu' && (
-        <>
-          <section className="panel" style={{ marginBottom: '1rem' }}>
-            <h2>{t('menuCard')}</h2>
-            <p className="sub">{t('menuCardSub')}</p>
-            <ImageUploadDropzone
-              busy={cardBusy}
-              onFile={(file) => void onUploadCard(file)}
-            />
-            <details className="menu-card-link-fold">
-              <summary>{t('menuCardOrLink')}</summary>
-              <label className="full">
-                {t('menuCardLink')}
-                <input
-                  value={cardLink}
-                  onChange={(e) => setCardLink(e.target.value)}
-                  placeholder={t('menuCardLinkPlaceholder')}
-                />
-              </label>
-              <div className="form-actions" style={{ marginTop: '0.65rem' }}>
-                <button
-                  className="btn btn-accent"
-                  type="button"
-                  disabled={cardBusy || !cardLink.trim()}
-                  onClick={() => void saveCardLink()}
-                >
-                  {cardBusy ? t('menuCardUploading') : t('menuCardSave')}
-                </button>
-              </div>
-            </details>
-            {cardMsg && (
-              <div className="feedback-banner" role="status" style={{ marginTop: '0.75rem' }}>
-                {cardMsg}
-              </div>
-            )}
-            {safeMediaUrl(gathering.menuCardUrl) && (
-              <div className="menu-card-preview">
-                <img src={safeMediaUrl(gathering.menuCardUrl)} alt={t('menuCard')} />
-                <div className="menu-card-preview-actions">
-                  {!safeMediaUrl(gathering.menuCardUrl).startsWith('data:') && (
-                    <a
-                      className="btn btn-ghost btn-sm"
-                      href={safeMediaUrl(gathering.menuCardUrl)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {t('menuCardOpen')}
-                    </a>
-                  )}
-                  <button
-                    className="btn btn-danger btn-sm"
-                    type="button"
-                    disabled={cardBusy}
-                    onClick={() => void clearMenuCard()}
-                  >
-                    {t('menuCardClear')}
-                  </button>
-                </div>
-              </div>
-            )}
-            {!safeMediaUrl(gathering.menuCardUrl) && gathering.menuCardUrl && (
-              <div className="form-actions" style={{ marginTop: '0.75rem' }}>
-                <button
-                  className="btn btn-danger btn-sm"
-                  type="button"
-                  disabled={cardBusy}
-                  onClick={() => void clearMenuCard()}
-                >
-                  {t('menuCardClear')}
-                </button>
-              </div>
-            )}
-          </section>
-
-          <EventCarteEditor
-            gathering={gathering}
-            onSave={(items, approved) => setMenuCarte(gathering.id, items, approved)}
-          />
-
-          <div className="layout-split">
-            <section className="panel">
-              <h2>{t('addMenuOption')}</h2>
-              <p className="sub">{t('addMenuSub')}</p>
-              {menuMsg && (
-                <div className="feedback-banner" role="status">
-                  {menuMsg}
-                </div>
-              )}
-              <form onSubmit={(e) => void onAddMenu(e)}>
-                <div className="menu-kind" role="group" aria-label={t('menuKindLabel')}>
-                  <button
-                    type="button"
-                    className={`menu-kind-option ${menuForm.kind === 'set' ? 'selected' : ''}`}
-                    aria-pressed={menuForm.kind === 'set'}
-                    onClick={() => setMenuForm({ ...menuForm, kind: 'set' })}
-                  >
-                    <strong>{t('setMenu')}</strong>
-                    <span>{t('setMenuSub')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`menu-kind-option ${menuForm.kind === 'alacarte' ? 'selected' : ''}`}
-                    aria-pressed={menuForm.kind === 'alacarte'}
-                    onClick={() =>
-                      setMenuForm({ ...menuForm, kind: 'alacarte', price: '', exclusions: '' })
-                    }
-                  >
-                    <strong>{t('alaCarte')}</strong>
-                    <span>{t('alaCarteHint')}</span>
-                  </button>
-                </div>
-
-                <div className="form-grid">
-                  <label className="full">
-                    {menuForm.kind === 'set' ? t('setMenuName') : t('alaCarteName')}
-                    <input
-                      required
-                      value={menuForm.name}
-                      onChange={(e) => setMenuForm({ ...menuForm, name: e.target.value })}
-                      placeholder={
-                        menuForm.kind === 'set'
-                          ? t('setMenuNamePlaceholder')
-                          : t('alaCarteNamePlaceholder')
-                      }
-                    />
-                  </label>
-
-                  {menuForm.kind === 'set' ? (
-                    <>
-                      <label className="full">
-                        {t('pricePerPerson')} ({gathering.currency})
-                        <input
-                          required
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={menuForm.price}
-                          onChange={(e) =>
-                            setMenuForm({ ...menuForm, price: e.target.value })
-                          }
-                          placeholder="25.00"
-                        />
-                      </label>
-                      <label className="full">
-                        {t('setMenuIncludes')}
-                        <textarea
-                          value={menuForm.description}
-                          onChange={(e) =>
-                            setMenuForm({ ...menuForm, description: e.target.value })
-                          }
-                          placeholder={t('setMenuIncludesPlaceholder')}
-                          rows={3}
-                        />
-                      </label>
-                      <label className="full">
-                        {t('setMenuExclusions')}
-                        <textarea
-                          value={menuForm.exclusions}
-                          onChange={(e) =>
-                            setMenuForm({ ...menuForm, exclusions: e.target.value })
-                          }
-                          placeholder={t('setMenuExclusionsPlaceholder')}
-                          rows={2}
-                        />
-                      </label>
-                    </>
-                  ) : (
-                    <label className="full">
-                      {t('description')}
-                      <textarea
-                        value={menuForm.description}
-                        onChange={(e) =>
-                          setMenuForm({ ...menuForm, description: e.target.value })
-                        }
-                        placeholder={t('alaCarteDescPlaceholder')}
-                        rows={2}
-                      />
-                    </label>
-                  )}
-                </div>
-                <div className="form-actions">
-                  <button className="btn btn-accent" type="submit" disabled={busy}>
-                    {busy ? t('adding') : t('addToMenu')}
-                  </button>
-                </div>
-              </form>
-            </section>
-
-            <section className="panel">
-              <h2>{t('currentMenu')}</h2>
-              <p className="sub">{t('optionsAvailable', { count: gathering.menu.length })}</p>
-              {gathering.menu.length === 0 ? (
-                <div className="empty">{t('addOptionBeforeShare')}</div>
-              ) : (
-                <div className="menu-list">
-                  {gathering.menu.map((item) => (
-                    <div key={item.id} className="menu-row">
-                      <div>
-                        <span className="chip chip-muted">
-                          {item.isAlaCarte ? t('alaCarte') : t('setMenu')}
-                        </span>
-                        <h4>{item.name}</h4>
-                        {item.description && (
-                          <p>
-                            <strong>{item.isAlaCarte ? '' : `${t('setMenuIncludes')}: `}</strong>
-                            {item.description}
-                          </p>
-                        )}
-                        {!item.isAlaCarte && item.exclusions && (
-                          <p className="menu-exclusions">
-                            <strong>{t('setMenuExclusions')}: </strong>
-                            {item.exclusions}
-                          </p>
-                        )}
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div className="price">
-                          {item.isAlaCarte
-                            ? t('priceVariable')
-                            : formatMoney(item.price, gathering.currency, localeTag)}
-                        </div>
-                        <div className="row-actions">
-                          <button
-                            className="btn btn-danger btn-sm"
-                            type="button"
-                            onClick={() => void removeMenuItem(gathering.id, item.id)}
-                          >
-                            {t('remove')}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>
-        </>
-      )}
       </div>
 
       {tab === 'guests' && (
@@ -1705,6 +1843,7 @@ export function EventPage() {
           />
         </section>
       )}
+      </div>
         </>
       )}
 
