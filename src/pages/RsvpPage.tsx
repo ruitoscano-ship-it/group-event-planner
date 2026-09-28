@@ -7,10 +7,12 @@ import {
 } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AgeGroupPicker } from '../components/AgeGroupPicker'
+import { GroupSizeStepper } from '../components/GroupSizeStepper'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { MenuOrderField } from '../components/MenuOrderField'
 import { MenuPicker } from '../components/MenuPicker'
 import { MenuSheet } from '../components/MenuSheet'
+import { PartyKindPicker, type PartyKind } from '../components/PartyKindPicker'
 import { useI18n } from '../i18n/I18nContext'
 import {
   createMemberDraft,
@@ -19,6 +21,7 @@ import {
   idsHaveAlaCarte,
   personOrderLabel,
   partySize,
+  resizeMembers,
   toggleMenuSelection,
   unitPriceForIds,
 } from '../lib/money'
@@ -62,7 +65,12 @@ export function RsvpPage() {
   const [name, setName] = useState(draft?.name ?? '')
   const [registeredBy, setRegisteredBy] = useState(draft?.registeredBy ?? '')
   const [forSomeoneElse, setForSomeoneElse] = useState(draft?.forSomeoneElse ?? false)
-  const [asGroup, setAsGroup] = useState(draft?.asGroup ?? false)
+  const [partyKind, setPartyKind] = useState<PartyKind | null>(() => {
+    if (draft?.asGroup) return 'group'
+    if (draft?.name) return 'individual'
+    return null
+  })
+  const asGroup = partyKind === 'group'
   const [members, setMembers] = useState<GroupMember[]>(() =>
     draft?.members?.length
       ? draft.members.map((m) => ({
@@ -70,7 +78,7 @@ export function RsvpPage() {
           ...m,
           carteItemIds: Array.isArray(m.carteItemIds) ? m.carteItemIds : [],
         }))
-      : [createMemberDraft(), createMemberDraft()],
+      : resizeMembers([], 2),
   )
   const [menuItemIds, setMenuItemIds] = useState<string[]>(draft?.menuItemIds ?? [])
   const [carteItemIds, setCarteItemIds] = useState<string[]>(
@@ -168,8 +176,31 @@ export function RsvpPage() {
   }, [gathering, asGroup, members, menuItemIds])
 
   const whoReady =
-    name.trim().length > 0 &&
-    (!forSomeoneElse || registeredBy.trim().length > 0)
+    partyKind === 'individual'
+      ? name.trim().length > 0 && (!forSomeoneElse || registeredBy.trim().length > 0)
+      : partyKind === 'group'
+        ? members.length >= 2 &&
+          members.every((m) => m.name.trim().length > 0) &&
+          (!forSomeoneElse || registeredBy.trim().length > 0)
+        : false
+
+  function ensureGroupName(): string {
+    const trimmed = name.trim()
+    if (trimmed) return trimmed
+    const first = members.find((m) => m.name.trim())?.name.trim()
+    return first || t('groupNamePlaceholder')
+  }
+
+  function choosePartyKind(next: PartyKind) {
+    setPartyKind(next)
+    if (next === 'group') {
+      setMembers((prev) => (prev.length >= 2 ? prev : resizeMembers(prev, 2)))
+    }
+  }
+
+  function setGroupSize(size: number) {
+    setMembers((prev) => resizeMembers(prev, size))
+  }
 
   const hasMenuLoaded = Boolean(
     gathering &&
@@ -219,8 +250,8 @@ export function RsvpPage() {
     setName('')
     setRegisteredBy('')
     setForSomeoneElse(false)
-    setAsGroup(false)
-    setMembers([createMemberDraft(), createMemberDraft()])
+    setPartyKind(null)
+    setMembers(resizeMembers([], 2))
     setMenuItemIds([])
     setCarteItemIds([])
     setAllergies('')
@@ -295,13 +326,21 @@ export function RsvpPage() {
   }
 
   async function onConfirm() {
-    if (!gathering || !name.trim() || saving) return
+    if (!gathering || saving) return
+    const displayName = asGroup ? ensureGroupName() : name.trim()
+    if (!displayName) return
     const registrar = forSomeoneElse
       ? registeredBy.trim() || 'Someone'
-      : name.trim()
+      : displayName
 
     if (!whoReady) {
-      setSubmitError(t('rsvpNeedWho'))
+      setSubmitError(
+        partyKind == null
+          ? t('rsvpNeedPartyKind')
+          : asGroup
+            ? t('rsvpNeedGroupPeople')
+            : t('rsvpNeedWho'),
+      )
       goTo('who')
       return
     }
@@ -318,7 +357,7 @@ export function RsvpPage() {
       const result = await addAttendee(
         gathering.id,
         {
-          name: name.trim(),
+          name: displayName,
           registeredBy: registrar,
           email: email.trim(),
           phone: phone.trim(),
@@ -346,10 +385,10 @@ export function RsvpPage() {
       )
 
       const summary = asGroup
-        ? `${name.trim()} · ${members.length} ${
+        ? `${displayName} · ${members.length} ${
             members.length === 1 ? t('personLabel') : t('peopleLabel')
           }`
-        : `${name.trim()}${
+        : `${displayName}${
             hasMenuLoaded
               ? ` · ${personOrderLabel(
                   menuItemIds,
@@ -362,7 +401,7 @@ export function RsvpPage() {
           }`
 
       saveGuestPrefs({
-        name: forSomeoneElse ? registeredBy.trim() : name.trim(),
+        name: forSomeoneElse ? registeredBy.trim() : displayName,
         email: email.trim(),
         phone: phone.trim(),
       })
@@ -608,101 +647,145 @@ export function RsvpPage() {
           <div className="rsvp-step-body">
             <h2>{t('rsvpStepWhoTitle')}</h2>
             <p className="sub">{t('rsvpStepWhoSub')}</p>
-            <div className="form-grid">
-              <label className="full">
-                {asGroup ? t('groupName') : t('guestName')}
-                <input
-                  required
-                  autoComplete="name"
-                  autoFocus
-                  enterKeyHint="next"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder={asGroup ? t('groupNamePlaceholder') : 'Alex'}
-                />
-              </label>
-              <label className="full paid-toggle">
-                <input
-                  type="checkbox"
-                  checked={asGroup}
-                  onChange={(e) => {
-                    const next = e.target.checked
-                    setAsGroup(next)
-                    if (next && members.length === 0) {
-                      setMembers([createMemberDraft(), createMemberDraft()])
-                    }
-                  }}
-                />
-                {t('registeringAsGroup')}
-              </label>
-              <label className="full paid-toggle">
-                <input
-                  type="checkbox"
-                  checked={forSomeoneElse}
-                  onChange={(e) => setForSomeoneElse(e.target.checked)}
-                />
-                {t('registeringSomeoneElse')}
-              </label>
-              {forSomeoneElse && (
+
+            <PartyKindPicker value={partyKind} onChange={choosePartyKind} />
+
+            {partyKind === 'individual' && (
+              <div className="form-grid rsvp-party-fields">
                 <label className="full">
-                  {t('yourName')}
+                  {t('guestName')}
                   <input
                     required
                     autoComplete="name"
-                    value={registeredBy}
-                    onChange={(e) => setRegisteredBy(e.target.value)}
-                    placeholder={t('placeholderRegistrar')}
+                    autoFocus
+                    enterKeyHint="next"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Alex"
                   />
                 </label>
-              )}
-              <label>
-                {t('emailOptional')}
-                <input
-                  type="email"
-                  autoComplete="email"
-                  inputMode="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder={t('placeholderEmail')}
-                />
-              </label>
-              <label>
-                {t('phoneOptional')}
-                <input
-                  type="tel"
-                  autoComplete="tel"
-                  inputMode="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder={t('placeholderPhone')}
-                />
-              </label>
-              {!asGroup && (
-                <>
-                  <div className="full">
-                    <AgeGroupPicker value={ageGroup} onChange={setAgeGroup} />
+                <div className="full">
+                  <AgeGroupPicker value={ageGroup} onChange={setAgeGroup} />
+                </div>
+                <label className="full">
+                  {t('allergiesDietary')}
+                  <input
+                    value={allergies}
+                    onChange={(e) => setAllergies(e.target.value)}
+                    placeholder={t('placeholderAllergies')}
+                    enterKeyHint="next"
+                  />
+                </label>
+              </div>
+            )}
+
+            {partyKind === 'group' && (
+              <div className="rsvp-party-fields">
+                <GroupSizeStepper value={members.length} onChange={setGroupSize} />
+                <div className="group-people">
+                  <h3>{t('groupPeopleTitle')}</h3>
+                  <p className="sub">{t('groupPeopleSub')}</p>
+                  <div className="group-people-list">
+                    {members.map((member, index) => (
+                      <div key={member.id} className="group-people-row">
+                        <span className="group-people-index" aria-hidden>
+                          {index + 1}
+                        </span>
+                        <label>
+                          <span className="sr-only">
+                            {t('memberLabel', { n: index + 1 })}
+                          </span>
+                          <input
+                            required
+                            value={member.name}
+                            onChange={(e) =>
+                              updateMember(member.id, { name: e.target.value })
+                            }
+                            placeholder={t('memberNamePlaceholder')}
+                            autoComplete="name"
+                            autoFocus={index === 0}
+                          />
+                        </label>
+                        <AgeGroupPicker
+                          value={member.ageGroup || 'adult'}
+                          onChange={(value) =>
+                            updateMember(member.id, { ageGroup: value })
+                          }
+                        />
+                      </div>
+                    ))}
                   </div>
-                  <label className="full">
-                    {t('allergiesDietary')}
+                </div>
+                <label className="full">
+                  {t('groupNameOptional')}
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={t('groupNamePlaceholder')}
+                  />
+                  <span className="field-hint">{t('groupNameAutoHint')}</span>
+                </label>
+              </div>
+            )}
+
+            {partyKind && (
+              <details className="rsvp-optional">
+                <summary>{t('rsvpOptionalDetails')}</summary>
+                <div className="form-grid">
+                  <label className="full paid-toggle">
                     <input
-                      value={allergies}
-                      onChange={(e) => setAllergies(e.target.value)}
-                      placeholder={t('placeholderAllergies')}
-                      enterKeyHint="next"
+                      type="checkbox"
+                      checked={forSomeoneElse}
+                      onChange={(e) => setForSomeoneElse(e.target.checked)}
+                    />
+                    {t('registeringSomeoneElse')}
+                  </label>
+                  {forSomeoneElse && (
+                    <label className="full">
+                      {t('yourName')}
+                      <input
+                        required
+                        autoComplete="name"
+                        value={registeredBy}
+                        onChange={(e) => setRegisteredBy(e.target.value)}
+                        placeholder={t('placeholderRegistrar')}
+                      />
+                    </label>
+                  )}
+                  <label>
+                    {t('emailOptional')}
+                    <input
+                      type="email"
+                      autoComplete="email"
+                      inputMode="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder={t('placeholderEmail')}
                     />
                   </label>
-                </>
-              )}
-              <label className="full">
-                {t('notes')}
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder={t('placeholderGuestNotes')}
-                  rows={2}
-                />
-              </label>
-            </div>
+                  <label>
+                    {t('phoneOptional')}
+                    <input
+                      type="tel"
+                      autoComplete="tel"
+                      inputMode="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder={t('placeholderPhone')}
+                    />
+                  </label>
+                  <label className="full">
+                    {t('notes')}
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder={t('placeholderGuestNotes')}
+                      rows={2}
+                    />
+                  </label>
+                </div>
+              </details>
+            )}
           </div>
         )}
 
@@ -718,57 +801,11 @@ export function RsvpPage() {
                 <p className="rsvp-venue-pick-title">{t('pickAlaCarteOnVenue')}</p>
                 <p className="sub">{t('pickAlaCarteOnVenueSub')}</p>
                 {asGroup && (
-                  <>
-                    <div className="member-list" style={{ marginTop: '1rem' }}>
-                      {members.map((member, index) => (
-                        <div key={member.id} className="member-card">
-                          <div className="member-card-head">
-                            <h4>{t('memberLabel', { n: index + 1 })}</h4>
-                            {members.length > 1 && (
-                              <button
-                                type="button"
-                                className="btn btn-danger btn-sm"
-                                onClick={() =>
-                                  setMembers((prev) =>
-                                    prev.filter((m) => m.id !== member.id),
-                                  )
-                                }
-                              >
-                                {t('removeMember')}
-                              </button>
-                            )}
-                          </div>
-                          <label>
-                            {t('memberName')}
-                            <input
-                              required
-                              value={member.name}
-                              onChange={(e) =>
-                                updateMember(member.id, { name: e.target.value })
-                              }
-                              placeholder={t('memberNamePlaceholder')}
-                              autoComplete="name"
-                            />
-                          </label>
-                          <AgeGroupPicker
-                            value={member.ageGroup || 'adult'}
-                            onChange={(value) =>
-                              updateMember(member.id, { ageGroup: value })
-                            }
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={() =>
-                        setMembers((prev) => [...prev, createMemberDraft()])
-                      }
-                    >
-                      {t('addMember')}
-                    </button>
-                  </>
+                  <ul className="group-people-summary">
+                    {members.map((member) => (
+                      <li key={member.id}>{member.name.trim() || '—'}</li>
+                    ))}
+                  </ul>
                 )}
               </div>
             ) : (
@@ -792,90 +829,58 @@ export function RsvpPage() {
             )}
 
             {asGroup ? (
-              <>
-                <div className="member-list">
-                  {members.map((member, index) => (
-                    <div key={member.id} className="member-card">
-                      <div className="member-card-head">
-                        <h4>{t('memberLabel', { n: index + 1 })}</h4>
-                        {members.length > 1 && (
-                          <button
-                            type="button"
-                            className="btn btn-danger btn-sm"
-                            onClick={() =>
-                              setMembers((prev) => prev.filter((m) => m.id !== member.id))
-                            }
-                          >
-                            {t('removeMember')}
-                          </button>
-                        )}
-                      </div>
-                      <label>
-                        {t('memberName')}
-                        <input
-                          required
-                          value={member.name}
-                          onChange={(e) => updateMember(member.id, { name: e.target.value })}
-                          placeholder={t('memberNamePlaceholder')}
-                          autoComplete="name"
-                        />
-                      </label>
-                      <AgeGroupPicker
-                        value={member.ageGroup || 'adult'}
-                        onChange={(value) => updateMember(member.id, { ageGroup: value })}
-                      />
-                      <label>
-                        {t('allergiesDietary')}
-                        <input
-                          value={member.allergies}
-                          onChange={(e) =>
-                            updateMember(member.id, { allergies: e.target.value })
-                          }
-                          placeholder={t('placeholderAllergies')}
-                        />
-                      </label>
-                      {gathering.menu.length > 0 && (
-                        <div>
-                          <p className="sub" style={{ marginBottom: '0.5rem' }}>
-                            {t('memberMenu')}
-                          </p>
-                          <MenuPicker
-                            menu={gathering.menu}
-                            selectedIds={member.menuItemIds}
-                            currency={gathering.currency}
-                            onToggle={(itemId) => toggleMemberMenu(member.id, itemId)}
-                            emptyLabel={t('organizerNoMenu')}
-                          />
-                        </div>
-                      )}
-                      {(gathering.menuCardUrl ||
-                        (gathering.carteApproved &&
-                          (gathering.carteItems || []).length > 0)) && (
-                        <MenuOrderField
-                          carteItems={gathering.carteItems || []}
-                          carteApproved={Boolean(gathering.carteApproved)}
-                          selectedCarteIds={member.carteItemIds || []}
-                          onCarteChange={(ids) =>
-                            updateMember(member.id, { carteItemIds: ids })
-                          }
-                          menuRequest={member.menuRequest}
-                          onMenuRequestChange={(value) =>
-                            updateMember(member.id, { menuRequest: value })
-                          }
-                          placeholder={t('menuRequestPlaceholder')}
-                        />
-                      )}
+              <div className="member-list">
+                {members.map((member, index) => (
+                  <div key={member.id} className="member-card">
+                    <div className="member-card-head">
+                      <h4>
+                        {member.name.trim() || t('memberLabel', { n: index + 1 })}
+                      </h4>
                     </div>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setMembers((prev) => [...prev, createMemberDraft()])}
-                >
-                  {t('addMember')}
-                </button>
-              </>
+                    <label>
+                      {t('allergiesDietary')}
+                      <input
+                        value={member.allergies}
+                        onChange={(e) =>
+                          updateMember(member.id, { allergies: e.target.value })
+                        }
+                        placeholder={t('placeholderAllergies')}
+                      />
+                    </label>
+                    {gathering.menu.length > 0 && (
+                      <div>
+                        <p className="sub" style={{ marginBottom: '0.5rem' }}>
+                          {t('memberMenu')}
+                        </p>
+                        <MenuPicker
+                          menu={gathering.menu}
+                          selectedIds={member.menuItemIds}
+                          currency={gathering.currency}
+                          onToggle={(itemId) => toggleMemberMenu(member.id, itemId)}
+                          emptyLabel={t('organizerNoMenu')}
+                        />
+                      </div>
+                    )}
+                    {(gathering.menuCardUrl ||
+                      (gathering.carteApproved &&
+                        (gathering.carteItems || []).length > 0)) && (
+                      <MenuOrderField
+                        carteItems={gathering.carteItems || []}
+                        carteApproved={Boolean(gathering.carteApproved)}
+                        selectedCarteIds={member.carteItemIds || []}
+                        onCarteChange={(ids) =>
+                          updateMember(member.id, { carteItemIds: ids })
+                        }
+                        menuRequest={member.menuRequest}
+                        onMenuRequestChange={(value) =>
+                          updateMember(member.id, { menuRequest: value })
+                        }
+                        placeholder={t('menuRequestPlaceholder')}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
             ) : (
               <>
                 {gathering.menu.length > 0 && (

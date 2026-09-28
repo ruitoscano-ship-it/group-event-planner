@@ -48,6 +48,20 @@ export function createMemberDraft(partial?: Partial<GroupMember>): GroupMember {
   }
 }
 
+/** Keep member drafts in sync with a chosen party size (1–30). */
+export function resizeMembers(
+  current: GroupMember[],
+  size: number,
+): GroupMember[] {
+  const n = Math.max(1, Math.min(30, Math.floor(size) || 1))
+  if (current.length === n) return current
+  if (current.length > n) return current.slice(0, n)
+  return [
+    ...current,
+    ...Array.from({ length: n - current.length }, () => createMemberDraft()),
+  ]
+}
+
 export function normalizeAgeGroup(value: unknown): AgeGroup {
   return value === 'child' ? 'child' : 'adult'
 }
