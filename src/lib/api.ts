@@ -173,9 +173,13 @@ export const api = {
   },
   addAttendee(
     gatheringId: string,
-    attendee: Omit<Attendee, 'id' | 'createdAt' | 'amountPaid' | 'extraAmount'> & {
+    attendee: Omit<
+      Attendee,
+      'id' | 'createdAt' | 'amountPaid' | 'extraAmount' | 'paymentClaimedAt'
+    > & {
       amountPaid?: number
       extraAmount?: number
+      paymentClaimedAt?: string
       guestKey?: string
     },
     options?: { asGuest?: boolean; organizerCode?: string | null },
@@ -195,15 +199,19 @@ export const api = {
   updateAttendee(
     gatheringId: string,
     attendeeId: string,
-    patch: Partial<Attendee>,
-    organizerCode?: string | null,
+    patch: Partial<Attendee> & { paymentClaimed?: boolean },
+    options?: { organizerCode?: string | null; guestKey?: string | null },
   ) {
+    const organizerCode = options?.guestKey
+      ? null
+      : withCode(gatheringId, options?.organizerCode)
     return request<Gathering>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/attendees/${encodeURIComponent(attendeeId)}`,
       {
         method: 'PATCH',
         body: JSON.stringify(patch),
-        organizerCode: withCode(gatheringId, organizerCode),
+        organizerCode,
+        guestKey: options?.guestKey || null,
       },
     )
   },

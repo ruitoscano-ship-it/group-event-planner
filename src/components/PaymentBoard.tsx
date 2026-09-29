@@ -35,7 +35,7 @@ type Props = {
   gathering: Gathering
   onUpdateAttendee: (
     attendeeId: string,
-    patch: Partial<Attendee>,
+    patch: Partial<Attendee> & { paymentClaimed?: boolean },
   ) => Promise<void>
 }
 
@@ -328,6 +328,9 @@ export function PaymentBoard({ gathering, onUpdateAttendee }: Props) {
                   onMarkPaid={(m) => void markMemberPaid(a, m)}
                   onReset={(m) => void resetMember(a, m)}
                   onSplit={() => void splitUnallocated(a)}
+                  onDismissClaim={() =>
+                    void onUpdateAttendee(a.id, { paymentClaimed: false })
+                  }
                 />
               )
             }
@@ -357,6 +360,21 @@ export function PaymentBoard({ gathering, onUpdateAttendee }: Props) {
                       t('noSelection'),
                     )}
                   </p>
+                  {Boolean(a.paymentClaimedAt) && !settled && (
+                    <div className="payment-claim" role="status">
+                      <span className="chip chip-warm">{t('paymentClaimedChip')}</span>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-ghost"
+                        disabled={busy}
+                        onClick={() =>
+                          void onUpdateAttendee(a.id, { paymentClaimed: false })
+                        }
+                      >
+                        {t('paymentClaimDismiss')}
+                      </button>
+                    </div>
+                  )}
                   <PersonMoneyFields
                     currency={gathering.currency}
                     localeTag={localeTag}
@@ -403,6 +421,7 @@ function GroupPaymentCard({
   onMarkPaid,
   onReset,
   onSplit,
+  onDismissClaim,
 }: {
   attendee: Attendee
   gathering: Gathering
@@ -413,6 +432,7 @@ function GroupPaymentCard({
   onMarkPaid: (member: GroupMember) => void
   onReset: (member: GroupMember) => void
   onSplit: () => void
+  onDismissClaim: () => void
 }) {
   const { t, localeTag } = useI18n()
   const owed = attendeeTotal(attendee, gathering.menu)
@@ -428,6 +448,19 @@ function GroupPaymentCard({
           <div>
             <h4>{attendee.name}</h4>
             <p>{t('groupBadge', { count: partySize(attendee) })}</p>
+            {Boolean(attendee.paymentClaimedAt) && !settled && (
+              <div className="payment-claim" role="status">
+                <span className="chip chip-warm">{t('paymentClaimedChip')}</span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost"
+                  disabled={busyKey === attendee.id}
+                  onClick={onDismissClaim}
+                >
+                  {t('paymentClaimDismiss')}
+                </button>
+              </div>
+            )}
           </div>
           <div className="guest-meta">
             <span className="chip chip-muted">

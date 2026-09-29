@@ -49,6 +49,11 @@ export type Attendee = {
   amountPaid: number
   /** Manual extras (€) for individuals — ignored when group has members. */
   extraAmount: number
+  /**
+   * Guest attested they sent payment (honor system). ISO timestamp or empty.
+   * Cleared when organizer marks paid or dismisses the claim.
+   */
+  paymentClaimedAt: string
   createdAt: string
   isGroup: boolean
   groupSize: number

@@ -41,6 +41,8 @@ export type Attendee = {
   ageGroup: AgeGroup
   amountPaid: number
   extraAmount: number
+  /** Guest attested they sent payment; ISO or empty. */
+  paymentClaimedAt: string
   createdAt: string
   isGroup: boolean
   groupSize: number

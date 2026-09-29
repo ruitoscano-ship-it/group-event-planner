@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { hasPaymentInstructions } from './paymentInfo'
 import { isRsvpOpen, todayLocalIsoDate } from './rsvpStatus'
-import { buildInviteShareText, whatsappShareUrl } from './inviteShare'
+import {
+  appleMapsSearchUrl,
+  buildChangeOfPlanText,
+  buildInviteShareText,
+  mapsSearchUrl,
+  rsvpQrImageUrl,
+  whatsappShareUrl,
+} from './inviteShare'
+import { buildAllergyDigestText, buildBookingPingText } from './dayOfShare'
 import { buildGatheringIcs, toIcsLocalStamp } from './calendarIcs'
 import {
   mailtoNudgeUrl,
   unpaidNudgeText,
   whatsappNudgeUrl,
 } from './nudgeLinks'
+import { makeGathering, makeSolo } from './testFixtures'
 
 describe('payment instructions', () => {
   it('detects any filled payment field', () => {
@@ -67,8 +76,8 @@ describe('rsvp open/closed', () => {
   })
 })
 
-describe('invite share', () => {
-  it('builds PT/EN invite text and WhatsApp URL', () => {
+describe('invite share + maps', () => {
+  it('builds PT/EN invite text with maps link', () => {
     const pt = buildInviteShareText({
       title: 'Almoço',
       dateLabel: 'sex., 10 abr. 2026',
@@ -78,8 +87,48 @@ describe('invite share', () => {
       locale: 'pt',
     })
     expect(pt).toContain('Convite: Almoço')
+    expect(pt).toContain('Mapa:')
     expect(pt).toContain('https://example.com/rsvp/1')
+    expect(mapsSearchUrl('Lisboa')).toContain('maps.google.com')
+    expect(appleMapsSearchUrl('Lisboa')).toContain('maps.apple.com')
     expect(whatsappShareUrl('olá')).toContain('wa.me')
+    expect(rsvpQrImageUrl('https://example.com/rsvp/1')).toContain('qrserver')
+  })
+
+  it('builds change-of-plan WhatsApp text', () => {
+    const text = buildChangeOfPlanText({
+      title: 'Lunch',
+      dateLabel: 'Fri 10 Apr',
+      time: '14:00',
+      location: 'Porto',
+      rsvpUrl: 'https://example.com/rsvp/1',
+      locale: 'en',
+    })
+    expect(text).toContain('The plan changed')
+    expect(text).toContain('Porto')
+  })
+})
+
+describe('day-of blurbs', () => {
+  it('builds allergy digest and booking ping', () => {
+    const gathering = makeGathering({
+      attendees: [
+        makeSolo({
+          name: 'Alex',
+          allergies: 'gluten',
+          menuItemIds: ['menu_adult'],
+        }),
+      ],
+    })
+    const allergy = buildAllergyDigestText(gathering, 'en')
+    expect(allergy).toContain('Alex')
+    expect(allergy).toContain('gluten')
+    const booking = buildBookingPingText(gathering, {
+      dateLabel: 'Fri',
+      locale: 'en',
+    })
+    expect(booking).toContain('People:')
+    expect(booking).toContain('Allergies:')
   })
 })
 
@@ -110,7 +159,9 @@ describe('nudge links', () => {
       locale: 'en',
     })
     expect(text).toContain('Alex')
-    expect(whatsappNudgeUrl('+351 912 345 678', text)).toContain('wa.me/351912345678')
+    expect(whatsappNudgeUrl('+351 912 345 678', text)).toContain(
+      'wa.me/351912345678',
+    )
     expect(mailtoNudgeUrl('a@b.com', 'Pay', text)).toContain('mailto:')
     expect(whatsappNudgeUrl('', text)).toBeNull()
   })

@@ -17,8 +17,10 @@ import { PaymentInstructionsView } from '../components/PaymentInstructionsView'
 import { useI18n } from '../i18n/I18nContext'
 import { buildGatheringIcs, downloadIcs } from '../lib/calendarIcs'
 import {
+  buildChangeOfPlanText,
   buildInviteShareText,
   nativeShare,
+  rsvpQrImageUrl,
   whatsappShareUrl,
 } from '../lib/inviteShare'
 import {
@@ -160,6 +162,7 @@ export function EventPage() {
   const [editingDetails, setEditingDetails] = useState(false)
   const [shareDone, setShareDone] = useState(false)
   const [shareMsg, setShareMsg] = useState<string | null>(null)
+  const [changePlanText, setChangePlanText] = useState<string | null>(null)
   const [payFormBusy, setPayFormBusy] = useState(false)
   const [payFormMsg, setPayFormMsg] = useState<string | null>(null)
   const [menuMsg, setMenuMsg] = useState<string | null>(null)
@@ -598,12 +601,18 @@ export function EventPage() {
     setDetailsMsg(null)
     setDetailsError(false)
     try {
+      const prev = {
+        date: event.date || '',
+        time: event.time || '',
+        location: (event.location || '').trim(),
+      }
+      const nextLoc = detailsForm.location.trim()
       await updateGathering(event.id, {
         title: detailsForm.title.trim() || event.title,
         notes: detailsForm.notes.trim(),
         date: detailsForm.date,
         time: detailsForm.time,
-        location: detailsForm.location.trim(),
+        location: nextLoc,
         organizerName: detailsForm.organizerName.trim(),
         organizerEmail: detailsForm.organizerEmail.trim(),
         organizerPhone: detailsForm.organizerPhone.trim(),
@@ -617,6 +626,22 @@ export function EventPage() {
       })
       setDetailsMsg(pickFeedback(t, [...detailsSavedKeys]))
       setEditingDetails(false)
+      const planChanged =
+        prev.date !== detailsForm.date ||
+        prev.time !== detailsForm.time ||
+        prev.location !== nextLoc
+      if (planChanged) {
+        setChangePlanText(
+          buildChangeOfPlanText({
+            title: detailsForm.title.trim() || event.title,
+            dateLabel: formatDate(detailsForm.date, localeTag, t('dateTbd')),
+            time: detailsForm.time || '',
+            location: nextLoc,
+            rsvpUrl,
+            locale,
+          }),
+        )
+      }
     } catch (err) {
       setDetailsError(true)
       setDetailsMsg(err instanceof Error ? err.message : t('detailsSaveFailed'))
@@ -1069,6 +1094,42 @@ export function EventPage() {
                   role="status"
                 >
                   {detailsMsg}
+                </div>
+              )}
+              {changePlanText && (
+                <div className="feedback-banner change-plan-banner" role="status">
+                  <p>{t('changeOfPlanReady')}</p>
+                  <div className="form-actions">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-accent"
+                      onClick={() =>
+                        window.open(
+                          whatsappShareUrl(changePlanText),
+                          '_blank',
+                          'noopener,noreferrer',
+                        )
+                      }
+                    >
+                      {t('changeOfPlanWhatsApp')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(changePlanText)
+                      }}
+                    >
+                      {t('changeOfPlanCopy')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => setChangePlanText(null)}
+                    >
+                      {t('dismiss')}
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -1609,6 +1670,16 @@ export function EventPage() {
                   <strong>{t('selfServiceLink')}</strong>
                   <p className="setup-share-hint">{t('selfServiceLinkHint')}</p>
                   <code>{rsvpUrl}</code>
+                </div>
+                <div className="setup-share-qr">
+                  <img
+                    src={rsvpQrImageUrl(rsvpUrl, 200)}
+                    alt={t('walkUpQrAlt')}
+                    width={200}
+                    height={200}
+                    loading="lazy"
+                  />
+                  <p className="sub">{t('walkUpQrHint')}</p>
                 </div>
                 <div className="setup-share-actions">
                   <button

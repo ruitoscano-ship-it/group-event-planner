@@ -322,6 +322,7 @@ function normalizeGathering(raw: Gathering & { menuOcrLines?: string[] }): Gathe
         ageGroup: a.ageGroup === 'child' ? 'child' : 'adult',
         amountPaid: Math.max(0, Number(a.amountPaid) || 0),
         extraAmount: Math.max(0, Number(a.extraAmount) || 0),
+        paymentClaimedAt: clip(a.paymentClaimedAt || '', 40),
         guestKey: a.guestKey || '',
         isGroup,
         members,
@@ -1199,6 +1200,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
         ageGroup: isGroup ? 'adult' : body.ageGroup === 'child' ? 'child' : 'adult',
         amountPaid: current.amountPaid,
         extraAmount: current.extraAmount || 0,
+        paymentClaimedAt: current.paymentClaimedAt || '',
         guestKey,
         isGroup,
         members,
@@ -1239,6 +1241,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       ageGroup: isGroup ? 'adult' : body.ageGroup === 'child' ? 'child' : 'adult',
       amountPaid: asOrganizer ? Math.max(0, Number(body.amountPaid) || 0) : 0,
       extraAmount: asOrganizer ? Math.max(0, Number(body.extraAmount) || 0) : 0,
+      paymentClaimedAt: '',
       guestKey,
       createdAt: new Date().toISOString(),
       isGroup,
@@ -1266,14 +1269,40 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (!gathering) return error('Gathering not found', 404)
 
     if (method === 'PATCH') {
-      const denied = await requireOrganizer(request, env, gathering)
-      if (denied) return denied
-      const bodyOrErr = await readJsonBody<Partial<Attendee>>(request)
+      const asOrganizer = await canManageOrganizer(request, env, gathering)
+      const guestKeyHeader =
+        request.headers.get('X-Guest-Key') ||
+        new URL(request.url).searchParams.get('guestKey') ||
+        ''
+      const bodyOrErr = await readJsonBody<
+        Partial<Attendee> & { paymentClaimed?: boolean }
+      >(request)
       if (bodyOrErr instanceof Response) return bodyOrErr
       const body = bodyOrErr
       const idx = gathering.attendees.findIndex((a) => a.id === attendeeId)
       if (idx === -1) return error('Attendee not found', 404)
       const current = gathering.attendees[idx]
+
+      // Guest may only attest / clear their own payment claim
+      if (!asOrganizer) {
+        if (!current.guestKey || guestKeyHeader !== current.guestKey) {
+          return error('Guest access required', 401)
+        }
+        if (typeof body.paymentClaimed !== 'boolean' && body.paymentClaimedAt === undefined) {
+          return error('Only payment claim updates are allowed for guests', 403)
+        }
+        const claimed =
+          typeof body.paymentClaimed === 'boolean'
+            ? body.paymentClaimed
+            : Boolean(body.paymentClaimedAt)
+        gathering.attendees[idx] = {
+          ...current,
+          paymentClaimedAt: claimed ? new Date().toISOString() : '',
+        }
+        await writeGathering(env.DB, gathering, false)
+        return json(toClientGathering(gathering, false))
+      }
+
       const nextEmail =
         body.email !== undefined
           ? normalizeEmail(String(body.email))
@@ -1308,6 +1337,16 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
               ? 0
               : current.amountPaid
           : nextPaid
+      let paymentClaimedAt = current.paymentClaimedAt || ''
+      if (typeof body.paymentClaimed === 'boolean') {
+        paymentClaimedAt = body.paymentClaimed ? new Date().toISOString() : ''
+      } else if (body.paymentClaimedAt !== undefined) {
+        paymentClaimedAt = clip(String(body.paymentClaimedAt || ''), 40)
+      }
+      // Marking paid clears the guest claim
+      if (body.amountPaid !== undefined && parentPaid > 0) {
+        paymentClaimedAt = ''
+      }
       gathering.attendees[idx] = {
         ...current,
         name: body.name !== undefined ? clip(body.name, MAX_NAME) : current.name,
@@ -1348,6 +1387,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
             : current.ageGroup || 'adult',
         amountPaid: parentPaid,
         extraAmount: isGroup && members.length > 0 ? 0 : nextExtra,
+        paymentClaimedAt,
         guestKey: current.guestKey || newGuestKey(),
         id: attendeeId,
         isGroup,

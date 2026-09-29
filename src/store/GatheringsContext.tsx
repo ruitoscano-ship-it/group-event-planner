@@ -30,10 +30,11 @@ import type {
 
 type AddAttendeeInput = Omit<
   Attendee,
-  'id' | 'createdAt' | 'amountPaid' | 'extraAmount'
+  'id' | 'createdAt' | 'amountPaid' | 'extraAmount' | 'paymentClaimedAt'
 > & {
   amountPaid?: number
   extraAmount?: number
+  paymentClaimedAt?: string
   guestKey?: string
 }
 
@@ -78,7 +79,8 @@ type Store = {
   updateAttendee: (
     gatheringId: string,
     attendeeId: string,
-    patch: Partial<Attendee>,
+    patch: Partial<Attendee> & { paymentClaimed?: boolean },
+    options?: { guestKey?: string },
   ) => Promise<void>
   removeAttendee: (
     gatheringId: string,
@@ -266,8 +268,15 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
   )
 
   const updateAttendee = useCallback(
-    async (gatheringId: string, attendeeId: string, patch: Partial<Attendee>) => {
-      const next = await api.updateAttendee(gatheringId, attendeeId, patch)
+    async (
+      gatheringId: string,
+      attendeeId: string,
+      patch: Partial<Attendee> & { paymentClaimed?: boolean },
+      options?: { guestKey?: string },
+    ) => {
+      const next = await api.updateAttendee(gatheringId, attendeeId, patch, {
+        guestKey: options?.guestKey,
+      })
       setGatherings((prev) => upsert(prev, next))
     },
     [],

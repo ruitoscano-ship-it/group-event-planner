@@ -1630,6 +1630,40 @@ textarea {
   }
 }
 
+.kitchen-share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
+}
+
+.setup-share-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0.85rem 0;
+}
+
+.setup-share-qr img {
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.5rem;
+  border: 1px solid rgba(6, 40, 35, 0.1);
+}
+
+.payment-claim {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.45rem 0 0.35rem;
+}
+
+.change-plan-banner .form-actions {
+  margin-top: 0.5rem;
+}
+
 .nudge-links {
   display: flex;
   flex-wrap: wrap;

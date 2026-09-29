@@ -49,7 +49,7 @@ type Step = 'who' | 'menu' | 'review'
 export function RsvpPage() {
   const { eventId = '' } = useParams()
   const { t, localeTag } = useI18n()
-  const { getGathering, ensureGathering, addAttendee, sendMessage, removeAttendee } =
+  const { getGathering, ensureGathering, addAttendee, sendMessage, removeAttendee, updateAttendee } =
     useGatherings()
   const gathering = getGathering(eventId)
   const formTopRef = useRef<HTMLElement | null>(null)
@@ -98,6 +98,8 @@ export function RsvpPage() {
   const [saving, setSaving] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [cancelBusy, setCancelBusy] = useState(false)
+  const [claimBusy, setClaimBusy] = useState(false)
+  const [paymentClaimed, setPaymentClaimed] = useState(false)
   const [contactOpen, setContactOpen] = useState(false)
   const [contactForm, setContactForm] = useState({
     fromName: prefs.name || '',
@@ -505,6 +507,35 @@ export function RsvpPage() {
           </p>
           <PaymentInstructionsView gathering={gathering} />
           <div className="form-actions rsvp-success-actions">
+            <button
+              type="button"
+              className="btn btn-accent"
+              disabled={claimBusy || paymentClaimed || !loadMyRsvp(gathering.id)?.guestKey}
+              onClick={() => {
+                const mine = loadMyRsvp(gathering.id)
+                if (!mine?.attendeeId || !mine.guestKey) return
+                setClaimBusy(true)
+                void updateAttendee(
+                  gathering.id,
+                  mine.attendeeId,
+                  { paymentClaimed: true },
+                  { guestKey: mine.guestKey },
+                )
+                  .then(() => setPaymentClaimed(true))
+                  .catch((err) => {
+                    setSubmitError(
+                      err instanceof Error ? err.message : t('contactFailed'),
+                    )
+                  })
+                  .finally(() => setClaimBusy(false))
+              }}
+            >
+              {paymentClaimed
+                ? t('paymentClaimSentDone')
+                : claimBusy
+                  ? t('saving')
+                  : t('paymentClaimSent')}
+            </button>
             <button
               type="button"
               className="btn btn-accent"
