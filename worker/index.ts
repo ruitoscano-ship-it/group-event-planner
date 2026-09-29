@@ -14,6 +14,12 @@ import {
   verifyAdminPassword,
   verifyAdminToken,
 } from './adminAuth'
+import { preserveMemberBilling } from './billing'
+import {
+  formatOrganizerCode,
+  generateOrganizerCode,
+  normalizeOrganizerCode,
+} from './organizerCode'
 import {
   buildGoogleAuthUrl,
   clearOAuthStateCookie,
@@ -94,27 +100,6 @@ function newId(prefix: string): string {
 
 function newGuestKey(): string {
   return crypto.randomUUID().replace(/-/g, '')
-}
-
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-
-function normalizeOrganizerCode(code: string): string {
-  return String(code || '')
-    .replace(/[^a-zA-Z0-9]/g, '')
-    .toUpperCase()
-}
-
-function formatOrganizerCode(code: string): string {
-  const raw = normalizeOrganizerCode(code)
-  if (raw.length <= 4) return raw
-  return `${raw.slice(0, 4)}-${raw.slice(4, 8)}`
-}
-
-function generateOrganizerCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(8))
-  let raw = ''
-  for (const b of bytes) raw += CODE_ALPHABET[b % CODE_ALPHABET.length]
-  return formatOrganizerCode(raw)
 }
 
 function normalizeEmail(email: string): string {
@@ -546,23 +531,6 @@ function normalizeMembers(
 }
 
 /** Keep billing fields when guests update RSVP menus without sending payments. */
-function preserveMemberBilling(
-  next: Attendee['members'],
-  previous: Attendee['members'] | undefined,
-): Attendee['members'] {
-  if (!previous?.length) return next
-  const byId = new Map(previous.map((m) => [m.id, m]))
-  return next.map((m) => {
-    const prev = byId.get(m.id)
-    if (!prev) return m
-    return {
-      ...m,
-      amountPaid: Math.max(0, Number(prev.amountPaid) || 0),
-      extraAmount: Math.max(0, Number(prev.extraAmount) || 0),
-    }
-  })
-}
-
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
