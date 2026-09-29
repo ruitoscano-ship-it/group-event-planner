@@ -1630,6 +1630,99 @@ textarea {
   }
 }
 
+.nudge-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.payment-instructions {
+  margin: 1rem 0;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid rgba(6, 40, 35, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.payment-instructions.compact {
+  margin: 0.75rem 0 0;
+}
+
+.payment-instructions h3,
+.payment-instructions > strong {
+  margin: 0 0 0.25rem;
+  display: block;
+}
+
+.payment-qr {
+  display: block;
+  max-width: 180px;
+  margin-top: 0.75rem;
+  border-radius: 10px;
+}
+
+.payment-instructions-form {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(6, 40, 35, 0.08);
+}
+
+.kitchen-table-wrap {
+  overflow-x: auto;
+  margin-top: 0.75rem;
+}
+
+.kitchen-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.kitchen-table th,
+.kitchen-table td {
+  text-align: left;
+  padding: 0.55rem 0.4rem;
+  border-bottom: 1px solid rgba(6, 40, 35, 0.08);
+  vertical-align: top;
+}
+
+.kitchen-table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #5d726c;
+}
+
+.kitchen-table tr.has-allergy {
+  background: rgba(142, 42, 33, 0.06);
+}
+
+.allergy-flag {
+  color: #8e2a21;
+}
+
+.rsvp-optional-block {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(6, 40, 35, 0.08);
+}
+
+.rsvp-optional-block h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.checkbox-row input[type='checkbox'] {
+  margin-top: 0.25rem;
+}
+
 .share-box {
   display: flex;
   flex-wrap: wrap;

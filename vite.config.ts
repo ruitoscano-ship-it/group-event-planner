@@ -13,7 +13,6 @@ export default defineConfig({
   },
   test: {
     environment: 'happy-dom',
-    environmentMatchGlobs: [['worker/**', 'node']],
     include: ['src/**/*.test.ts', 'worker/**/*.test.ts'],
   },
 })

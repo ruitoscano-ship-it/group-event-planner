@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useI18n } from '../i18n/I18nContext'
 import {
   attendeePaidTotal,
@@ -15,6 +15,12 @@ import {
   personTotal,
   isPersonSettled,
 } from '../lib/money'
+import {
+  mailtoNudgeUrl,
+  smsNudgeUrl,
+  unpaidNudgeText,
+  whatsappNudgeUrl,
+} from '../lib/nudgeLinks'
 import type { Attendee, Gathering, GroupMember } from '../types'
 
 type PartyFilter = 'all' | 'individuals' | 'groups'
@@ -43,6 +49,52 @@ function draftFromPerson(extraAmount: number, amountPaid: number): PersonDraft {
 function parseAmount(raw: string): number {
   const n = Number(raw)
   return Number.isFinite(n) && n >= 0 ? n : 0
+}
+
+function NudgeLinks({
+  name,
+  email,
+  phone,
+  amountLabel,
+  eventTitle,
+}: {
+  name: string
+  email: string
+  phone: string
+  amountLabel: string
+  eventTitle: string
+}) {
+  const { t, locale } = useI18n()
+  const text = unpaidNudgeText({
+    guestName: name,
+    eventTitle,
+    amountLabel,
+    locale,
+  })
+  const subject = t('nudgeSubject', { title: eventTitle })
+  const wa = whatsappNudgeUrl(phone, text)
+  const sms = smsNudgeUrl(phone, text)
+  const mail = mailtoNudgeUrl(email, subject, text)
+  if (!wa && !sms && !mail) return null
+  return (
+    <div className="nudge-links">
+      {wa && (
+        <a className="btn btn-sm btn-ghost" href={wa} target="_blank" rel="noreferrer">
+          {t('nudgeWhatsApp')}
+        </a>
+      )}
+      {sms && (
+        <a className="btn btn-sm btn-ghost" href={sms}>
+          {t('nudgeSms')}
+        </a>
+      )}
+      {mail && (
+        <a className="btn btn-sm btn-ghost" href={mail}>
+          {t('nudgeEmail')}
+        </a>
+      )}
+    </div>
+  )
 }
 
 export function PaymentBoard({ gathering, onUpdateAttendee }: Props) {
@@ -319,6 +371,17 @@ export function PaymentBoard({ gathering, onUpdateAttendee }: Props) {
                     onBlurSave={(next) => void saveIndividual(a, next)}
                     onMarkPaid={() => void markIndividualPaid(a)}
                     onReset={() => void resetIndividual(a)}
+                    nudge={
+                      !settled && due > 0.001 ? (
+                        <NudgeLinks
+                          name={a.name}
+                          email={a.email || ''}
+                          phone={a.phone || ''}
+                          amountLabel={formatMoney(due, gathering.currency, localeTag)}
+                          eventTitle={gathering.title}
+                        />
+                      ) : null
+                    }
                   />
                 </div>
               </div>
@@ -442,6 +505,17 @@ function GroupPaymentCard({
                   onBlurSave={(next) => onSaveMember(m.id, next)}
                   onMarkPaid={() => onMarkPaid(m)}
                   onReset={() => onReset(m)}
+                  nudge={
+                    !personSettled && due > 0.001 ? (
+                      <NudgeLinks
+                        name={m.name}
+                        email={attendee.email || ''}
+                        phone={attendee.phone || ''}
+                        amountLabel={formatMoney(due, gathering.currency, localeTag)}
+                        eventTitle={gathering.title}
+                      />
+                    ) : null
+                  }
                 />
               </div>
             )
@@ -466,6 +540,7 @@ function PersonMoneyFields({
   onBlurSave,
   onMarkPaid,
   onReset,
+  nudge,
 }: {
   currency: string
   localeTag: string
@@ -480,6 +555,7 @@ function PersonMoneyFields({
   onBlurSave: (next: PersonDraft) => void
   onMarkPaid: () => void
   onReset: () => void
+  nudge?: ReactNode
 }) {
   const { t } = useI18n()
 
@@ -551,6 +627,7 @@ function PersonMoneyFields({
           </button>
         </div>
       </div>
+      {nudge}
     </>
   )
 }

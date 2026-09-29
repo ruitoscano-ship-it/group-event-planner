@@ -6,13 +6,21 @@ import { FirstEventCoach, type CoachStep } from '../components/FirstEventCoach'
 import { GroupSizeStepper } from '../components/GroupSizeStepper'
 import { GuestEditor } from '../components/GuestEditor'
 import { ImageUploadDropzone } from '../components/ImageUploadDropzone'
+import { KitchenBoard } from '../components/KitchenBoard'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { MenuOrderField } from '../components/MenuOrderField'
 import { MenuPicker } from '../components/MenuPicker'
 import { MenuSheet } from '../components/MenuSheet'
 import { PartyKindPicker, type PartyKind } from '../components/PartyKindPicker'
 import { PaymentBoard } from '../components/PaymentBoard'
+import { PaymentInstructionsView } from '../components/PaymentInstructionsView'
 import { useI18n } from '../i18n/I18nContext'
+import { buildGatheringIcs, downloadIcs } from '../lib/calendarIcs'
+import {
+  buildInviteShareText,
+  nativeShare,
+  whatsappShareUrl,
+} from '../lib/inviteShare'
 import {
   compressImageFile,
   createMemberDraft,
@@ -28,7 +36,13 @@ import {
   formatOrganizerCode,
   loadOrganizerCode,
 } from '../lib/organizerAccess'
-import { buildEventReportHtml, openEventReport } from '../lib/report'
+import { hasPaymentInstructions } from '../lib/paymentInfo'
+import {
+  buildEventReportHtml,
+  buildOrderSheetHtml,
+  openEventReport,
+} from '../lib/report'
+import { isRsvpOpen } from '../lib/rsvpStatus'
 import { safeMediaUrl } from '../lib/safeUrl'
 import {
   detailsSavedKeys,
@@ -45,13 +59,37 @@ import { useGatherings } from '../store/GatheringsContext'
 import { useOrganizerAuth } from '../store/OrganizerAuthContext'
 import type { AgeGroup, GroupMember } from '../types'
 
-type Tab = 'guests' | 'payments' | 'inbox'
+type Tab = 'guests' | 'payments' | 'kitchen' | 'inbox'
+
+const SHARE_DONE_KEY = 'round-share-done-v1'
+
+function loadShareDone(eventId: string): boolean {
+  try {
+    const raw = localStorage.getItem(SHARE_DONE_KEY)
+    if (!raw) return false
+    const parsed = JSON.parse(raw) as Record<string, boolean>
+    return Boolean(parsed[eventId])
+  } catch {
+    return false
+  }
+}
+
+function markShareDone(eventId: string) {
+  try {
+    const raw = localStorage.getItem(SHARE_DONE_KEY)
+    const parsed = raw ? (JSON.parse(raw) as Record<string, boolean>) : {}
+    parsed[eventId] = true
+    localStorage.setItem(SHARE_DONE_KEY, JSON.stringify(parsed))
+  } catch {
+    // ignore
+  }
+}
 
 export function EventPage() {
   const { eventId = '' } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { t, localeTag } = useI18n()
+  const { t, locale, localeTag } = useI18n()
   const {
     getGathering,
     ensureGathering,
@@ -100,17 +138,30 @@ export function EventPage() {
   const [cardBusy, setCardBusy] = useState(false)
   const [cardMsg, setCardMsg] = useState<string | null>(null)
   const [detailsForm, setDetailsForm] = useState({
+    title: '',
+    notes: '',
     date: '',
     time: '',
     location: '',
     organizerName: '',
     organizerEmail: '',
     organizerPhone: '',
+    paymentIban: '',
+    paymentMbWay: '',
+    paymentBizum: '',
+    paymentNote: '',
+    paymentQrUrl: '',
+    rsvpDeadline: '',
+    rsvpClosed: false,
   })
   const [detailsBusy, setDetailsBusy] = useState(false)
   const [detailsMsg, setDetailsMsg] = useState<string | null>(null)
   const [detailsError, setDetailsError] = useState(false)
   const [editingDetails, setEditingDetails] = useState(false)
+  const [shareDone, setShareDone] = useState(false)
+  const [shareMsg, setShareMsg] = useState<string | null>(null)
+  const [payFormBusy, setPayFormBusy] = useState(false)
+  const [payFormMsg, setPayFormMsg] = useState<string | null>(null)
   const [menuMsg, setMenuMsg] = useState<string | null>(null)
   const [editingGuestId, setEditingGuestId] = useState<string | null>(null)
   const [menuForm, setMenuForm] = useState({
@@ -214,21 +265,40 @@ export function EventPage() {
   useEffect(() => {
     if (!gathering) return
     setDetailsForm({
+      title: gathering.title || '',
+      notes: gathering.notes || '',
       date: gathering.date || '',
       time: gathering.time || '',
       location: gathering.location || '',
       organizerName: gathering.organizerName || '',
       organizerEmail: gathering.organizerEmail || '',
       organizerPhone: gathering.organizerPhone || '',
+      paymentIban: gathering.paymentIban || '',
+      paymentMbWay: gathering.paymentMbWay || '',
+      paymentBizum: gathering.paymentBizum || '',
+      paymentNote: gathering.paymentNote || '',
+      paymentQrUrl: gathering.paymentQrUrl || '',
+      rsvpDeadline: gathering.rsvpDeadline || '',
+      rsvpClosed: Boolean(gathering.rsvpClosed),
     })
+    setShareDone(loadShareDone(gathering.id))
   }, [
     gathering?.id,
+    gathering?.title,
+    gathering?.notes,
     gathering?.date,
     gathering?.time,
     gathering?.location,
     gathering?.organizerName,
     gathering?.organizerEmail,
     gathering?.organizerPhone,
+    gathering?.paymentIban,
+    gathering?.paymentMbWay,
+    gathering?.paymentBizum,
+    gathering?.paymentNote,
+    gathering?.paymentQrUrl,
+    gathering?.rsvpDeadline,
+    gathering?.rsvpClosed,
   ])
 
   const totals = useMemo(
@@ -341,12 +411,13 @@ export function EventPage() {
   }
 
   const rsvpUrl = `${window.location.origin}/rsvp/${gathering.id}`
+  const event = gathering
   const typeLabel =
-    gathering.type === 'lunch'
+    event.type === 'lunch'
       ? t('typeLunch')
-      : gathering.type === 'dinner'
+      : event.type === 'dinner'
         ? t('typeDinner')
-        : gathering.type === 'brunch'
+        : event.type === 'brunch'
           ? t('typeBrunch')
           : t('typeOther')
 
@@ -363,7 +434,7 @@ export function EventPage() {
 
   async function saveOrganizerCodeEdit(e: FormEvent) {
     e.preventDefault()
-    if (!gathering || codeBusy) return
+    if (codeBusy) return
     const next = formatOrganizerCode(codeDraft)
     const raw = next.replace(/[^a-zA-Z0-9]/g, '')
     if (raw.length < 6 || raw.length > 12) {
@@ -375,7 +446,7 @@ export function EventPage() {
     setCodeError(false)
     setCodeMsg(null)
     try {
-      await updateOrganizerCode(gathering.id, next)
+      await updateOrganizerCode(event.id, next)
       setEditingCode(false)
       setCodeMsg(t('organizerCodeUpdated'))
     } catch (err) {
@@ -390,17 +461,74 @@ export function EventPage() {
     try {
       await navigator.clipboard.writeText(rsvpUrl)
       setCopied(true)
+      markShareDone(event.id)
+      setShareDone(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
       setCopied(false)
     }
   }
 
+  function inviteText() {
+    return buildInviteShareText({
+      title: event.title,
+      dateLabel: formatDate(event.date, localeTag, t('dateTbd')),
+      time: event.time || '',
+      location: event.location || '',
+      rsvpUrl,
+      locale,
+    })
+  }
+
+  async function shareInviteNative() {
+    const text = inviteText()
+    const result = await nativeShare({
+      title: event.title,
+      text,
+      url: rsvpUrl,
+    })
+    if (result === 'shared') {
+      markShareDone(event.id)
+      setShareDone(true)
+      return
+    }
+    if (result === 'unsupported') {
+      try {
+        await navigator.clipboard.writeText(text)
+        markShareDone(event.id)
+        setShareDone(true)
+        setShareMsg(t('shareCopiedInvite'))
+        window.setTimeout(() => setShareMsg(null), 2000)
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  function shareInviteWhatsApp() {
+    markShareDone(event.id)
+    setShareDone(true)
+    window.open(whatsappShareUrl(inviteText()), '_blank', 'noopener,noreferrer')
+  }
+
+  function downloadCalendar() {
+    const ics = buildGatheringIcs({
+      id: event.id,
+      title: event.title,
+      date: event.date,
+      time: event.time,
+      location: event.location,
+      notes: event.notes,
+      rsvpUrl,
+    })
+    if (!ics) return
+    downloadIcs(`${event.title || 'event'}.ics`, ics)
+  }
+
   function openFullReport() {
-    if (!gathering) return
     setReportMsg(null)
     const html = buildEventReportHtml(
-      gathering,
+      event,
       {
         title: t('eventReportTitle'),
         generated: t('reportGenerated'),
@@ -430,6 +558,32 @@ export function EventPage() {
         avgPerPerson: t('reportAvgPerPerson'),
         priceVariable: t('priceVariable'),
         noMenuTypeData: t('reportNoMenuTypeData'),
+        howToPay: t('paymentHowToPay'),
+        iban: t('paymentIban'),
+        mbWay: t('paymentMbWay'),
+        bizum: t('paymentBizum'),
+        payNote: t('paymentNote'),
+      },
+      localeTag,
+    )
+    const ok = openEventReport(html)
+    if (!ok) setReportMsg(t('reportPopupBlocked'))
+  }
+
+  function openOrderSheet() {
+    setReportMsg(null)
+    const html = buildOrderSheetHtml(
+      event,
+      {
+        title: t('orderSheetTitle'),
+        generated: t('reportGenerated'),
+        dish: t('reportDish'),
+        qty: t('reportQty'),
+        empty: t('orderSheetEmpty'),
+        dateTbd: t('dateTbd'),
+        locationTbd: t('locationTbd'),
+        printHint: t('reportPrintHint'),
+        carte: t('pickFromCarte'),
       },
       localeTag,
     )
@@ -439,18 +593,27 @@ export function EventPage() {
 
   async function onSaveDetails(e: FormEvent) {
     e.preventDefault()
-    if (!gathering || detailsBusy) return
+    if (detailsBusy) return
     setDetailsBusy(true)
     setDetailsMsg(null)
     setDetailsError(false)
     try {
-      await updateGathering(gathering.id, {
+      await updateGathering(event.id, {
+        title: detailsForm.title.trim() || event.title,
+        notes: detailsForm.notes.trim(),
         date: detailsForm.date,
         time: detailsForm.time,
         location: detailsForm.location.trim(),
         organizerName: detailsForm.organizerName.trim(),
         organizerEmail: detailsForm.organizerEmail.trim(),
         organizerPhone: detailsForm.organizerPhone.trim(),
+        paymentIban: detailsForm.paymentIban.trim(),
+        paymentMbWay: detailsForm.paymentMbWay.trim(),
+        paymentBizum: detailsForm.paymentBizum.trim(),
+        paymentNote: detailsForm.paymentNote.trim(),
+        paymentQrUrl: detailsForm.paymentQrUrl.trim(),
+        rsvpDeadline: detailsForm.rsvpDeadline.trim(),
+        rsvpClosed: detailsForm.rsvpClosed,
       })
       setDetailsMsg(pickFeedback(t, [...detailsSavedKeys]))
       setEditingDetails(false)
@@ -463,18 +626,47 @@ export function EventPage() {
   }
 
   function cancelEditDetails() {
-    if (!gathering) return
     setDetailsForm({
-      date: gathering.date || '',
-      time: gathering.time || '',
-      location: gathering.location || '',
-      organizerName: gathering.organizerName || '',
-      organizerEmail: gathering.organizerEmail || '',
-      organizerPhone: gathering.organizerPhone || '',
+      title: event.title || '',
+      notes: event.notes || '',
+      date: event.date || '',
+      time: event.time || '',
+      location: event.location || '',
+      organizerName: event.organizerName || '',
+      organizerEmail: event.organizerEmail || '',
+      organizerPhone: event.organizerPhone || '',
+      paymentIban: event.paymentIban || '',
+      paymentMbWay: event.paymentMbWay || '',
+      paymentBizum: event.paymentBizum || '',
+      paymentNote: event.paymentNote || '',
+      paymentQrUrl: event.paymentQrUrl || '',
+      rsvpDeadline: event.rsvpDeadline || '',
+      rsvpClosed: Boolean(event.rsvpClosed),
     })
     setEditingDetails(false)
     setDetailsMsg(null)
     setDetailsError(false)
+  }
+
+  async function onSavePaymentInstructions(e: FormEvent) {
+    e.preventDefault()
+    if (payFormBusy) return
+    setPayFormBusy(true)
+    setPayFormMsg(null)
+    try {
+      await updateGathering(event.id, {
+        paymentIban: detailsForm.paymentIban.trim(),
+        paymentMbWay: detailsForm.paymentMbWay.trim(),
+        paymentBizum: detailsForm.paymentBizum.trim(),
+        paymentNote: detailsForm.paymentNote.trim(),
+        paymentQrUrl: detailsForm.paymentQrUrl.trim(),
+      })
+      setPayFormMsg(t('paymentInstructionsSaved'))
+    } catch (err) {
+      setPayFormMsg(err instanceof Error ? err.message : t('detailsSaveFailed'))
+    } finally {
+      setPayFormBusy(false)
+    }
   }
 
   async function onAddMenu(e: FormEvent) {
@@ -666,6 +858,7 @@ export function EventPage() {
   const tabOptions = [
     ['guests', 'tabGuests'],
     ['payments', 'tabPayments'],
+    ['kitchen', 'kitchenTab'],
     ['inbox', 'tabInbox'],
   ] as const
   const step1Done = Boolean(gathering.date && gathering.location)
@@ -673,6 +866,8 @@ export function EventPage() {
     gathering.menuCardUrl || (gathering.carteItems || []).length > 0,
   )
   const step3Done = gathering.menu.length > 0
+  const step4Done = shareDone
+  const rsvpOpen = isRsvpOpen(gathering)
 
   return (
     <>
@@ -799,7 +994,7 @@ export function EventPage() {
                       n: 4,
                       label: t('setupStep4Short'),
                       hint: t('setupStep4Hint'),
-                      done: false,
+                      done: step4Done,
                     },
                   ] as const
                 ).map((step, i, arr) => (
@@ -862,7 +1057,7 @@ export function EventPage() {
                       setDetailsError(false)
                     }}
                   >
-                    {t('editGuest')}
+                    {t('editEventDetails')}
                   </button>
                 ) : (
                   <span className="chip chip-warm">{t('editingLabel')}</span>
@@ -879,6 +1074,10 @@ export function EventPage() {
 
               {!editingDetails ? (
                 <dl className="details-summary">
+                  <div className="full">
+                    <dt>{t('eventTitleField')}</dt>
+                    <dd>{gathering.title}</dd>
+                  </div>
                   <div>
                     <dt>{t('date')}</dt>
                     <dd>
@@ -907,10 +1106,38 @@ export function EventPage() {
                     <dt>{t('organizerPhone')}</dt>
                     <dd>{gathering.organizerPhone || '—'}</dd>
                   </div>
+                  {gathering.notes.trim() && (
+                    <div className="full">
+                      <dt>{t('eventNotesField')}</dt>
+                      <dd>{gathering.notes}</dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt>{t('rsvpDeadline')}</dt>
+                    <dd>
+                      {gathering.rsvpDeadline
+                        ? formatDate(gathering.rsvpDeadline, localeTag, t('dateTbd'))
+                        : '—'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{t('rsvpClosedToggle')}</dt>
+                    <dd>{gathering.rsvpClosed || !rsvpOpen ? t('yes') : t('no')}</dd>
+                  </div>
                 </dl>
               ) : (
                 <form onSubmit={(e) => void onSaveDetails(e)}>
                   <div className="form-grid">
+                    <label className="full">
+                      {t('eventTitleField')}
+                      <input
+                        value={detailsForm.title}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, title: e.target.value })
+                        }
+                        required
+                      />
+                    </label>
                     <label>
                       {t('date')}
                       <input
@@ -974,6 +1201,88 @@ export function EventPage() {
                         }
                         placeholder={t('placeholderPhone')}
                         autoComplete="tel"
+                      />
+                    </label>
+                    <label className="full">
+                      {t('eventNotesField')}
+                      <textarea
+                        value={detailsForm.notes}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, notes: e.target.value })
+                        }
+                        rows={2}
+                      />
+                    </label>
+                    <label>
+                      {t('rsvpDeadline')}
+                      <input
+                        type="date"
+                        value={detailsForm.rsvpDeadline}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, rsvpDeadline: e.target.value })
+                        }
+                      />
+                    </label>
+                    <label className="full checkbox-row">
+                      <input
+                        type="checkbox"
+                        checked={detailsForm.rsvpClosed}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, rsvpClosed: e.target.checked })
+                        }
+                      />
+                      <span>
+                        {t('rsvpClosedToggle')}
+                        <span className="sub"> — {t('rsvpClosedHint')}</span>
+                      </span>
+                    </label>
+                    <p className="sub full">{t('rsvpDeadlineHint')}</p>
+                    <label>
+                      {t('paymentIban')}
+                      <input
+                        value={detailsForm.paymentIban}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, paymentIban: e.target.value })
+                        }
+                        autoComplete="off"
+                      />
+                    </label>
+                    <label>
+                      {t('paymentMbWay')}
+                      <input
+                        value={detailsForm.paymentMbWay}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, paymentMbWay: e.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      {t('paymentBizum')}
+                      <input
+                        value={detailsForm.paymentBizum}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, paymentBizum: e.target.value })
+                        }
+                      />
+                    </label>
+                    <label className="full">
+                      {t('paymentNote')}
+                      <textarea
+                        value={detailsForm.paymentNote}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, paymentNote: e.target.value })
+                        }
+                        rows={2}
+                      />
+                    </label>
+                    <label className="full">
+                      {t('paymentQr')}
+                      <input
+                        value={detailsForm.paymentQrUrl}
+                        onChange={(e) =>
+                          setDetailsForm({ ...detailsForm, paymentQrUrl: e.target.value })
+                        }
+                        placeholder="https://…"
                       />
                     </label>
                   </div>
@@ -1276,14 +1585,25 @@ export function EventPage() {
                 <p className="demo-inline-tip">{t('demoTipShare')}</p>
               )}
               <div className="setup-step-head">
-                <span className="setup-step-num" aria-hidden>
+                <span className={`setup-step-num ${step4Done ? 'done' : ''}`} aria-hidden>
                   4
                 </span>
                 <div className="setup-step-copy">
                   <h2>{t('setupStep4')}</h2>
                   <p className="sub">{t('setupStep4Sub')}</p>
                 </div>
+                {step4Done && <span className="chip">{t('setupStepDone')}</span>}
               </div>
+              {!rsvpOpen && (
+                <div className="feedback-banner" role="status">
+                  {t('rsvpClosedBanner')}
+                </div>
+              )}
+              {shareMsg && (
+                <div className="feedback-banner" role="status">
+                  {shareMsg}
+                </div>
+              )}
               <div className="setup-share">
                 <div className="setup-share-label">
                   <strong>{t('selfServiceLink')}</strong>
@@ -1298,6 +1618,20 @@ export function EventPage() {
                   >
                     {copied ? t('copied') : t('copyInviteLink')}
                   </button>
+                  <button
+                    className="btn btn-sm btn-accent"
+                    type="button"
+                    onClick={shareInviteWhatsApp}
+                  >
+                    {t('shareWhatsApp')}
+                  </button>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    type="button"
+                    onClick={() => void shareInviteNative()}
+                  >
+                    {t('shareNative')}
+                  </button>
                   <Link
                     viewTransition
                     className="btn btn-sm btn-ghost"
@@ -1308,9 +1642,24 @@ export function EventPage() {
                   <button
                     className="btn btn-sm btn-ghost"
                     type="button"
+                    onClick={downloadCalendar}
+                    disabled={!gathering.date}
+                  >
+                    {t('addToCalendar')}
+                  </button>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    type="button"
                     onClick={openFullReport}
                   >
                     {t('openEventReport')}
+                  </button>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    type="button"
+                    onClick={openOrderSheet}
+                  >
+                    {t('openOrderSheet')}
                   </button>
                 </div>
               </div>
@@ -1848,12 +2197,97 @@ export function EventPage() {
         <section className="panel">
           <h2>{t('paymentTracking')}</h2>
           <p className="sub">{t('paymentTrackingSub')}</p>
+          <form
+            className="payment-instructions-form"
+            onSubmit={(e) => void onSavePaymentInstructions(e)}
+          >
+            <h3>{t('paymentHowToPay')}</h3>
+            <p className="sub">{t('paymentHowToPaySub')}</p>
+            {payFormMsg && (
+              <div className="feedback-banner" role="status">
+                {payFormMsg}
+              </div>
+            )}
+            <div className="form-grid">
+              <label>
+                {t('paymentIban')}
+                <input
+                  value={detailsForm.paymentIban}
+                  onChange={(e) =>
+                    setDetailsForm({ ...detailsForm, paymentIban: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                {t('paymentMbWay')}
+                <input
+                  value={detailsForm.paymentMbWay}
+                  onChange={(e) =>
+                    setDetailsForm({ ...detailsForm, paymentMbWay: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                {t('paymentBizum')}
+                <input
+                  value={detailsForm.paymentBizum}
+                  onChange={(e) =>
+                    setDetailsForm({ ...detailsForm, paymentBizum: e.target.value })
+                  }
+                />
+              </label>
+              <label className="full">
+                {t('paymentNote')}
+                <textarea
+                  value={detailsForm.paymentNote}
+                  onChange={(e) =>
+                    setDetailsForm({ ...detailsForm, paymentNote: e.target.value })
+                  }
+                  rows={2}
+                />
+              </label>
+              <label className="full">
+                {t('paymentQr')}
+                <input
+                  value={detailsForm.paymentQrUrl}
+                  onChange={(e) =>
+                    setDetailsForm({ ...detailsForm, paymentQrUrl: e.target.value })
+                  }
+                />
+              </label>
+            </div>
+            <div className="form-actions">
+              <button className="btn btn-accent btn-sm" type="submit" disabled={payFormBusy}>
+                {payFormBusy ? t('saving') : t('paymentSaveInstructions')}
+              </button>
+            </div>
+          </form>
+          {hasPaymentInstructions(gathering) && (
+            <PaymentInstructionsView gathering={gathering} />
+          )}
           <PaymentBoard
             gathering={gathering}
             onUpdateAttendee={(attendeeId, patch) =>
               updateAttendee(gathering.id, attendeeId, patch)
             }
           />
+        </section>
+      )}
+
+      {tab === 'kitchen' && (
+        <section className="panel">
+          <h2>{t('kitchenTitle')}</h2>
+          <p className="sub">{t('kitchenSub')}</p>
+          <div className="form-actions" style={{ marginBottom: '0.75rem' }}>
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              onClick={openOrderSheet}
+            >
+              {t('openOrderSheet')}
+            </button>
+          </div>
+          <KitchenBoard gathering={gathering} />
         </section>
       )}
       </div>

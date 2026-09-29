@@ -82,6 +82,17 @@ export type Gathering = {
   menuCardUrl: string
   /** Google-linked owner when the organizer signed in. */
   ownerUserId?: string | null
+  /** How guests should pay the organizer (manual — Round does not process payments). */
+  paymentIban: string
+  paymentMbWay: string
+  paymentBizum: string
+  paymentNote: string
+  /** Optional QR / payment screenshot (http(s) or data:image). */
+  paymentQrUrl: string
+  /** YYYY-MM-DD — after this date new guest RSVPs are blocked (organizer can still add). */
+  rsvpDeadline: string
+  /** When true, guest self-service RSVP is closed regardless of deadline. */
+  rsvpClosed: boolean
   /** Editable event carte (organizer-managed, often from OCR) */
   carteItems: CarteItem[]
   /** When true, invitees can multi-pick from the carte */
@@ -117,10 +128,24 @@ export type GatheringInput = Omit<
   | 'menuCardUrl'
   | 'carteItems'
   | 'carteApproved'
+  | 'paymentIban'
+  | 'paymentMbWay'
+  | 'paymentBizum'
+  | 'paymentNote'
+  | 'paymentQrUrl'
+  | 'rsvpDeadline'
+  | 'rsvpClosed'
 > & {
   menuCardUrl?: string
   carteItems?: CarteItem[]
   carteApproved?: boolean
+  paymentIban?: string
+  paymentMbWay?: string
+  paymentBizum?: string
+  paymentNote?: string
+  paymentQrUrl?: string
+  rsvpDeadline?: string
+  rsvpClosed?: boolean
 }
 
 export type MessageInput = {

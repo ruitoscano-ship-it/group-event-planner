@@ -92,7 +92,6 @@ export function makeGroup(partial?: Partial<Attendee>): Attendee {
     createdAt: '2026-01-01T12:00:00.000Z',
     isGroup: true,
     groupSize: members.length,
-    members,
     ...partial,
     members,
   }
@@ -118,6 +117,13 @@ export function makeGathering(partial?: Partial<Gathering>): Gathering {
     attendees: [],
     messages: [],
     createdAt: '2026-01-01T12:00:00.000Z',
+    paymentIban: '',
+    paymentMbWay: '',
+    paymentBizum: '',
+    paymentNote: '',
+    paymentQrUrl: '',
+    rsvpDeadline: '',
+    rsvpClosed: false,
     ...partial,
   }
 }

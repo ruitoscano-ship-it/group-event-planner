@@ -80,7 +80,11 @@ type Store = {
     attendeeId: string,
     patch: Partial<Attendee>,
   ) => Promise<void>
-  removeAttendee: (gatheringId: string, attendeeId: string) => Promise<void>
+  removeAttendee: (
+    gatheringId: string,
+    attendeeId: string,
+    options?: { guestKey?: string },
+  ) => Promise<void>
   sendMessage: (gatheringId: string, message: MessageInput) => Promise<void>
   markMessageRead: (
     gatheringId: string,
@@ -269,10 +273,19 @@ export function GatheringsProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const removeAttendee = useCallback(async (gatheringId: string, attendeeId: string) => {
-    const next = await api.removeAttendee(gatheringId, attendeeId)
-    setGatherings((prev) => upsert(prev, next))
-  }, [])
+  const removeAttendee = useCallback(
+    async (
+      gatheringId: string,
+      attendeeId: string,
+      options?: { guestKey?: string },
+    ) => {
+      const next = await api.removeAttendee(gatheringId, attendeeId, {
+        guestKey: options?.guestKey,
+      })
+      setGatherings((prev) => upsert(prev, next))
+    },
+    [],
+  )
 
   const sendMessage = useCallback(async (gatheringId: string, message: MessageInput) => {
     await api.sendMessage(gatheringId, message)

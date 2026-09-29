@@ -357,6 +357,11 @@ export type ReportLabels = {
   avgPerPerson: string
   priceVariable: string
   noMenuTypeData: string
+  howToPay?: string
+  iban?: string
+  mbWay?: string
+  bizum?: string
+  payNote?: string
 }
 
 export function buildEventReportHtml(
@@ -664,6 +669,25 @@ export function buildEventReportHtml(
       <div class="card"><span>${escapeHtml(labels.stillDue)}</span><strong>${escapeHtml(formatMoney(outstanding, gathering.currency, localeTag))}</strong></div>
     </div>
 
+    ${
+      (gathering.paymentIban ||
+        gathering.paymentMbWay ||
+        gathering.paymentBizum ||
+        gathering.paymentNote ||
+        gathering.paymentQrUrl) &&
+      labels.howToPay
+        ? `<section class="section">
+      <h2>${escapeHtml(labels.howToPay)}</h2>
+      <dl class="person-fields">
+        ${gathering.paymentIban ? `<div><dt>${escapeHtml(labels.iban || 'IBAN')}</dt><dd><code>${escapeHtml(gathering.paymentIban)}</code></dd></div>` : ''}
+        ${gathering.paymentMbWay ? `<div><dt>${escapeHtml(labels.mbWay || 'MB Way')}</dt><dd>${escapeHtml(gathering.paymentMbWay)}</dd></div>` : ''}
+        ${gathering.paymentBizum ? `<div><dt>${escapeHtml(labels.bizum || 'Bizum')}</dt><dd>${escapeHtml(gathering.paymentBizum)}</dd></div>` : ''}
+        ${gathering.paymentNote ? `<div><dt>${escapeHtml(labels.payNote || 'Note')}</dt><dd>${escapeHtml(gathering.paymentNote)}</dd></div>` : ''}
+      </dl>
+    </section>`
+        : ''
+    }
+
     ${chartHtml}
 
     ${
@@ -700,4 +724,74 @@ export function openEventReport(html: string) {
   win.document.write(html)
   win.document.close()
   return true
+}
+
+export type OrderSheetLabels = {
+  title: string
+  generated: string
+  dish: string
+  qty: string
+  empty: string
+  dateTbd: string
+  locationTbd: string
+  printHint: string
+  carte: string
+}
+
+/** Restaurant-facing dish counts (no money / personal contacts). */
+export function buildOrderSheetHtml(
+  gathering: Gathering,
+  labels: OrderSheetLabels,
+  localeTag: string,
+): string {
+  const menuTypes = tallyMenuTypes(gathering, labels.carte)
+  const carteTally = tallyCartePicks(gathering)
+  const when = [
+    formatDate(gathering.date, localeTag, labels.dateTbd),
+    gathering.time,
+    gathering.location || labels.locationTbd,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  const rows = [
+    ...menuTypes.map(
+      (row) =>
+        `<tr><td>${escapeHtml(row.label)}${row.hasVariable ? ' *' : ''}</td><td>${row.count}</td></tr>`,
+    ),
+    ...carteTally.map(
+      (row) =>
+        `<tr><td>${escapeHtml(row.name)} (${escapeHtml(labels.carte)})</td><td>${row.count}</td></tr>`,
+    ),
+  ]
+
+  return `<!DOCTYPE html>
+<html lang="${escapeHtml(localeTag)}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(labels.title)} — ${escapeHtml(gathering.title)}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 1.25rem; color: #062823; }
+    h1 { font-size: 1.4rem; margin: 0 0 0.35rem; }
+    .meta { color: #5d726c; margin: 0.2rem 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { text-align: left; padding: 0.55rem 0.4rem; border-bottom: 1px solid #d7e4df; }
+    th { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #5d726c; }
+    .hint { font-size: 0.85rem; color: #5d726c; margin-top: 1rem; }
+    @media print { .hint { display: none; } }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(gathering.title)}</h1>
+  <p class="meta">${escapeHtml(when)}</p>
+  <p class="meta">${escapeHtml(labels.generated)}: ${escapeHtml(new Date().toLocaleString(localeTag))}</p>
+  ${
+    rows.length
+      ? `<table><thead><tr><th>${escapeHtml(labels.dish)}</th><th>${escapeHtml(labels.qty)}</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
+      : `<p>${escapeHtml(labels.empty)}</p>`
+  }
+  <p class="hint">${escapeHtml(labels.printHint)}</p>
+</body>
+</html>`
 }

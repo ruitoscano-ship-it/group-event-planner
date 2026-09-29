@@ -76,6 +76,13 @@ export type Gathering = {
   /** Google-linked owner; optional for legacy / code-only events. */
   ownerUserId?: string | null
   menuCardUrl: string
+  paymentIban: string
+  paymentMbWay: string
+  paymentBizum: string
+  paymentNote: string
+  paymentQrUrl: string
+  rsvpDeadline: string
+  rsvpClosed: boolean
   carteItems: CarteItem[]
   carteApproved: boolean
   menu: MenuItem[]

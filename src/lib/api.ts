@@ -11,15 +11,18 @@ import { loadOrganizerCode } from './organizerAccess'
 
 async function request<T>(
   path: string,
-  init?: RequestInit & { organizerCode?: string | null },
+  init?: RequestInit & { organizerCode?: string | null; guestKey?: string | null },
 ): Promise<T> {
-  const { organizerCode, ...rest } = init ?? {}
+  const { organizerCode, guestKey, ...rest } = init ?? {}
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(rest.headers as Record<string, string> | undefined),
   }
   if (organizerCode) {
     headers['X-Organizer-Code'] = organizerCode
+  }
+  if (guestKey) {
+    headers['X-Guest-Key'] = guestKey
   }
   const res = await fetch(path, {
     ...rest,
@@ -207,13 +210,17 @@ export const api = {
   removeAttendee(
     gatheringId: string,
     attendeeId: string,
-    organizerCode?: string | null,
+    options?: { organizerCode?: string | null; guestKey?: string | null },
   ) {
+    const organizerCode = options?.guestKey
+      ? null
+      : withCode(gatheringId, options?.organizerCode)
     return request<Gathering>(
       `/api/gatherings/${encodeURIComponent(gatheringId)}/attendees/${encodeURIComponent(attendeeId)}`,
       {
         method: 'DELETE',
-        organizerCode: withCode(gatheringId, organizerCode),
+        organizerCode,
+        guestKey: options?.guestKey || null,
       },
     )
   },

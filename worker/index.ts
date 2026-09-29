@@ -102,6 +102,20 @@ function newGuestKey(): string {
   return crypto.randomUUID().replace(/-/g, '')
 }
 
+function isGuestRsvpOpen(gathering: Gathering): boolean {
+  if (gathering.archivedAt) return false
+  if (gathering.rsvpClosed) return false
+  const deadline = (gathering.rsvpDeadline || '').trim()
+  if (deadline) {
+    const today = new Date()
+    const y = today.getFullYear()
+    const m = String(today.getMonth() + 1).padStart(2, '0')
+    const d = String(today.getDate()).padStart(2, '0')
+    if (`${y}-${m}-${d}` > deadline) return false
+  }
+  return true
+}
+
 function normalizeEmail(email: string): string {
   return String(email || '').trim().toLowerCase()
 }
@@ -252,6 +266,18 @@ function normalizeGathering(raw: Gathering & { menuOcrLines?: string[] }): Gathe
     menuCardUrl: raw.menuCardUrl || '',
     organizerCode: formatOrganizerCode(raw.organizerCode || '') || '',
     ownerUserId: raw.ownerUserId || null,
+    paymentIban: clip(raw.paymentIban || '', 80),
+    paymentMbWay: clip(raw.paymentMbWay || '', 40),
+    paymentBizum: clip(raw.paymentBizum || '', 40),
+    paymentNote: clip(raw.paymentNote || '', MAX_NOTES),
+    paymentQrUrl: (() => {
+      const card = sanitizeMenuCardUrl(raw.paymentQrUrl || '')
+      return typeof card === 'string' ? card : ''
+    })(),
+    rsvpDeadline: /^\d{4}-\d{2}-\d{2}$/.test(String(raw.rsvpDeadline || '').trim())
+      ? String(raw.rsvpDeadline).trim()
+      : '',
+    rsvpClosed: Boolean(raw.rsvpClosed),
     carteItems,
     carteApproved: Boolean(raw.carteApproved) && carteItems.length > 0,
     organizerName: clip(raw.organizerName, MAX_NAME),
@@ -790,6 +816,13 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
       organizerCode,
       ownerUserId: sessionUser?.id || null,
       menuCardUrl: card,
+      paymentIban: '',
+      paymentMbWay: '',
+      paymentBizum: '',
+      paymentNote: '',
+      paymentQrUrl: '',
+      rsvpDeadline: '',
+      rsvpClosed: false,
       carteItems: [],
       carteApproved: false,
       menu: [],
@@ -864,6 +897,35 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
           typeof body.organizerPhone === 'string'
             ? clip(body.organizerPhone, 40)
             : existing.organizerPhone,
+        paymentIban:
+          typeof body.paymentIban === 'string'
+            ? clip(body.paymentIban, 80)
+            : existing.paymentIban || '',
+        paymentMbWay:
+          typeof body.paymentMbWay === 'string'
+            ? clip(body.paymentMbWay, 40)
+            : existing.paymentMbWay || '',
+        paymentBizum:
+          typeof body.paymentBizum === 'string'
+            ? clip(body.paymentBizum, 40)
+            : existing.paymentBizum || '',
+        paymentNote:
+          typeof body.paymentNote === 'string'
+            ? clip(body.paymentNote, MAX_NOTES)
+            : existing.paymentNote || '',
+        paymentQrUrl: (() => {
+          if (typeof body.paymentQrUrl !== 'string') return existing.paymentQrUrl || ''
+          const qr = sanitizeMenuCardUrl(body.paymentQrUrl)
+          return typeof qr === 'string' ? qr : existing.paymentQrUrl || ''
+        })(),
+        rsvpDeadline:
+          typeof body.rsvpDeadline === 'string'
+            ? /^\d{4}-\d{2}-\d{2}$/.test(body.rsvpDeadline.trim())
+              ? body.rsvpDeadline.trim()
+              : ''
+            : existing.rsvpDeadline || '',
+        rsvpClosed:
+          typeof body.rsvpClosed === 'boolean' ? body.rsvpClosed : Boolean(existing.rsvpClosed),
         menuCardUrl: card,
         organizerCode: existing.organizerCode,
         ownerUserId: existing.ownerUserId || null,
@@ -1082,6 +1144,13 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (!body?.name?.trim()) return error('Guest name is required')
     const email = normalizeEmail(body.email || '')
 
+    const existingIdx = email
+      ? gathering.attendees.findIndex((a) => normalizeEmail(a.email) === email)
+      : -1
+
+    if (!asOrganizer && !isGuestRsvpOpen(gathering) && existingIdx < 0) {
+      return error('RSVPs are closed for this event', 403)
+    }
     const isGroup = Boolean(body.isGroup)
     const membersRaw = isGroup ? normalizeMembers(body.members) : []
     if (isGroup && membersRaw.length === 0) {
@@ -1090,10 +1159,6 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (!asOrganizer && gathering.attendees.length >= MAX_ATTENDEES) {
       return error('This event is full')
     }
-
-    const existingIdx = email
-      ? gathering.attendees.findIndex((a) => normalizeEmail(a.email) === email)
-      : -1
 
     if (existingIdx >= 0) {
       if (asOrganizer) {
@@ -1297,11 +1362,22 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     }
 
     if (method === 'DELETE') {
-      const denied = await requireOrganizer(request, env, gathering)
-      if (denied) return denied
+      const asOrganizer = await canManageOrganizer(request, env, gathering)
+      const guestKeyHeader =
+        request.headers.get('X-Guest-Key') ||
+        new URL(request.url).searchParams.get('guestKey') ||
+        ''
+      const idx = gathering.attendees.findIndex((a) => a.id === attendeeId)
+      if (idx === -1) return error('Attendee not found', 404)
+      const current = gathering.attendees[idx]
+      if (!asOrganizer) {
+        if (!current.guestKey || guestKeyHeader !== current.guestKey) {
+          return error('Guest access required to cancel this RSVP', 401)
+        }
+      }
       gathering.attendees = gathering.attendees.filter((a) => a.id !== attendeeId)
       await writeGathering(env.DB, gathering, false)
-      return json(toClientGathering(gathering, true))
+      return json(toClientGathering(gathering, asOrganizer))
     }
   }
 
