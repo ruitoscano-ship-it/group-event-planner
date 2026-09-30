@@ -95,7 +95,10 @@ export const translations = {
       'Código válido abre o evento e liga-o à tua conta (se ainda não tiver dono).',
     viewGatherings: 'Ver encontros',
     heroLede:
-      'Planeie almoços e jantares com amigos — defina o menu, deixe todos confirmar presença, registe alergias e veja quem ainda deve.',
+      'Um link. RSVPs, menu e contas — sem folhas de cálculo.',
+    homeGlimpseMockLocation: 'Tasca do Bairro',
+    homeGlimpseMockHost: 'Rui',
+    homeGlimpseMockNotes: 'Cheguem a horas — mesa no interior.',
     backToHome: 'Voltar ao início',
     homeFlowTitle: 'Como funciona',
     homeFlowLede: 'Três passos. Sem apps extra, sem folhas de cálculo.',
@@ -826,7 +829,10 @@ export const translations = {
       'A valid code opens the event and links it to your account (if it has no owner yet).',
     viewGatherings: 'View gatherings',
     heroLede:
-      'Plan lunches and dinners with friends — set the menu, let everyone RSVP themselves, track allergies, and see who still owes.',
+      'One link. RSVPs, menu, and money — without the spreadsheet.',
+    homeGlimpseMockLocation: 'Neighbourhood table',
+    homeGlimpseMockHost: 'Alex',
+    homeGlimpseMockNotes: 'Come on time — indoor table.',
     backToHome: 'Back to home',
     homeFlowTitle: 'How it works',
     homeFlowLede: 'Three steps. No extra apps, no spreadsheet chaos.',

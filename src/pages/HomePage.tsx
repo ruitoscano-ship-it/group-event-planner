@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CreateEventChat } from '../components/CreateEventChat'
+import { InviteCard } from '../components/InviteCard'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { useI18n } from '../i18n/I18nContext'
 import { authApi } from '../lib/authApi'
@@ -12,6 +13,29 @@ import { useOrganizerAuth } from '../store/OrganizerAuthContext'
 import type { GatheringInput } from '../types'
 
 type Mode = 'choose' | 'create' | 'code'
+
+const DEMO_INVITE = {
+  title: '',
+  type: 'lunch' as const,
+  date: '2026-10-03',
+  time: '13:00',
+  location: '',
+  notes: '',
+  organizerName: '',
+  menu: [
+    {
+      id: 'demo',
+      name: 'Menu',
+      description: '',
+      price: 18,
+      category: '',
+      isAlaCarte: false,
+    },
+  ],
+  carteItems: [],
+  carteApproved: false,
+  menuCardUrl: '',
+}
 
 export function HomePage() {
   const { createGathering, unlockWithCode, gatherings, loading } = useGatherings()
@@ -35,6 +59,13 @@ export function HomePage() {
   const [authBanner, setAuthBanner] = useState<string | null>(null)
 
   useEffect(() => {
+    document.body.dataset.page = 'home'
+    return () => {
+      delete document.body.dataset.page
+    }
+  }, [])
+
+  useEffect(() => {
     const signedIn = searchParams.get('signedIn')
     const authError = searchParams.get('authError')
     if (signedIn) {
@@ -54,6 +85,17 @@ export function HomePage() {
       (g) => known.includes(g.id) && loadOrganizerCode(g.id) && !owned.has(g.id),
     )
   }, [gatherings, myGatherings])
+
+  const demoGathering = useMemo(
+    () => ({
+      ...DEMO_INVITE,
+      title: t('homeGlimpseMockTitle'),
+      location: t('homeGlimpseMockLocation'),
+      organizerName: t('homeGlimpseMockHost'),
+      notes: t('homeGlimpseMockNotes'),
+    }),
+    [t],
+  )
 
   function goHome() {
     setMode('choose')
@@ -99,17 +141,28 @@ export function HomePage() {
     }
   }
 
+  function startCreate() {
+    setMode('create')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function startCode() {
+    setMode('code')
+    setAccessError(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   return (
     <>
-      <header className="topbar">
+      <header className="topbar topbar-home">
         <Link
           viewTransition
           to="/"
-          className="brand"
+          className="brand brand-mark-only"
           onClick={() => goHome()}
+          aria-label="Round"
         >
           <i className="brand-mark" aria-hidden />
-          Round<span>.</span>
         </Link>
         <div className="nav-actions">
           <LanguageSwitcher />
@@ -122,14 +175,14 @@ export function HomePage() {
       </header>
 
       {authBanner && (
-        <div className="feedback-banner" role="status" style={{ marginBottom: '1rem' }}>
+        <div className="feedback-banner status-banner home-auth-banner" role="status">
           {authBanner}
           <button
             type="button"
             className="btn btn-ghost btn-sm"
             onClick={() => setAuthBanner(null)}
           >
-            {t('cancel')}
+            {t('dismiss')}
           </button>
         </div>
       )}
@@ -145,9 +198,9 @@ export function HomePage() {
           />
         </div>
         <div className="landing-copy">
-          <p className="brand landing-brand">
+          <h1 className="brand landing-brand">
             Round<span>.</span>
-          </p>
+          </h1>
           <p className="hero-lede">{t('heroLede')}</p>
 
           {user && (
@@ -158,18 +211,18 @@ export function HomePage() {
 
           {mode === 'choose' && (
             <div className="landing-actions">
-              {authConfigured && !user && !authLoading && (
-                <a className="btn btn-accent landing-action" href={authApi.googleStartUrl}>
-                  {t('authSignInGoogle')}
-                </a>
-              )}
               <button
-                className={`btn landing-action ${user || !authConfigured ? 'btn-accent' : 'btn-ghost'}`}
+                className="btn btn-accent landing-action"
                 type="button"
                 onClick={() => setMode('create')}
               >
                 {t('createEvent')}
               </button>
+              {authConfigured && !user && !authLoading && (
+                <a className="btn btn-ghost landing-action" href={authApi.googleStartUrl}>
+                  {t('authSignInGoogle')}
+                </a>
+              )}
               <button
                 className="btn btn-ghost landing-action"
                 type="button"
@@ -190,27 +243,23 @@ export function HomePage() {
           {mode === 'code' && (
             <section className="landing-panel">
               <div className="landing-panel-head">
-                <h2>{t('findMyEvent')}</h2>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={goHome}
-                >
-                  {t('backToHome')}
+                <div>
+                  <h2>{t('findMyEvent')}</h2>
+                  <p className="sub">
+                    {user ? t('findMyEventSignedInSub') : t('findMyEventSub')}
+                  </p>
+                </div>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={goHome}>
+                  {t('dismiss')}
                 </button>
               </div>
-              <p className="sub">
-                {user ? t('findMyEventSignedInSub') : t('findMyEventSub')}
-              </p>
               {accessError && <p className="allergy">{accessError}</p>}
               <form onSubmit={(e) => void onAccess(e)}>
                 <label className="full">
                   {t('organizerCode')}
                   <input
                     value={accessCode}
-                    onChange={(e) =>
-                      setAccessCode(formatOrganizerCode(e.target.value))
-                    }
+                    onChange={(e) => setAccessCode(formatOrganizerCode(e.target.value))}
                     placeholder={t('organizerCodePlaceholder')}
                     autoCapitalize="characters"
                     autoCorrect="off"
@@ -219,13 +268,6 @@ export function HomePage() {
                   />
                 </label>
                 <div className="form-actions">
-                  <button
-                    className="btn btn-ghost"
-                    type="button"
-                    onClick={goHome}
-                  >
-                    {t('backToHome')}
-                  </button>
                   <button className="btn btn-accent" type="submit" disabled={accessBusy}>
                     {accessBusy ? t('saving') : t('openWithCode')}
                   </button>
@@ -236,226 +278,202 @@ export function HomePage() {
         </div>
       </section>
 
-      {mode === 'choose' && user && (
-        <section className="panel home-my-events" aria-labelledby="home-my-events-title">
-          <h2 id="home-my-events-title">{t('authMyEvents')}</h2>
-          <p className="sub">{t('authMyEventsSub')}</p>
-          {authLoading || loading ? (
-            <div className="empty">{t('loadingGathering')}</div>
-          ) : myGatherings.length === 0 ? (
-            <div className="empty">{t('authMyEventsEmpty')}</div>
-          ) : (
-            <div className="home-event-list">
-              {myGatherings.map((g) => (
-                <Link
-                  key={g.id}
-                  viewTransition
-                  className="home-event-card"
-                  to={`/events/${g.id}`}
-                >
-                  <strong>{g.title}</strong>
-                  <span>
-                    {formatDate(g.date, localeTag, t('dateTbd'))}
-                    {g.time ? ` · ${g.time}` : ''}
-                  </span>
-                  <span>{g.location || t('locationTbd')}</span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {mode === 'choose' && user && deviceOnlyEvents.length > 0 && (
-        <section className="panel home-device-events" aria-labelledby="home-device-events-title">
-          <h2 id="home-device-events-title">{t('authDeviceEvents')}</h2>
-          <p className="sub">{t('authDeviceEventsSub')}</p>
-          <div className="home-event-list">
-            {deviceOnlyEvents.map((g) => (
-              <div key={g.id} className="home-event-card home-event-card-row">
-                <div>
-                  <strong>{g.title}</strong>
-                  <span>
-                    {formatDate(g.date, localeTag, t('dateTbd'))}
-                    {g.time ? ` · ${g.time}` : ''}
-                  </span>
-                </div>
-                <div className="row-actions">
-                  <Link viewTransition className="btn btn-ghost btn-sm" to={`/events/${g.id}`}>
-                    {t('openWithCode')}
-                  </Link>
-                  {!ownsGathering(g.id) && (
-                    <button
-                      type="button"
-                      className="btn btn-accent btn-sm"
-                      disabled={claimBusyId === g.id}
-                      onClick={() => void claimDeviceEvent(g.id)}
-                    >
-                      {claimBusyId === g.id ? t('saving') : t('authAddToAccount')}
-                    </button>
-                  )}
-                </div>
+      <div className="home-body">
+        {mode === 'choose' && user && (
+          <section className="panel home-my-events" aria-labelledby="home-my-events-title">
+            <h2 id="home-my-events-title">{t('authMyEvents')}</h2>
+            <p className="sub">{t('authMyEventsSub')}</p>
+            {authLoading || loading ? (
+              <div className="empty">{t('loadingGathering')}</div>
+            ) : myGatherings.length === 0 ? (
+              <div className="empty empty-with-cta">
+                <p>{t('authMyEventsEmpty')}</p>
+                <button type="button" className="btn btn-accent" onClick={startCreate}>
+                  {t('createEvent')}
+                </button>
               </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {mode === 'choose' && (
-        <>
-          <section className="home-flow" aria-labelledby="home-flow-title">
-            <h2 id="home-flow-title">{t('homeFlowTitle')}</h2>
-            <p className="home-section-lede">{t('homeFlowLede')}</p>
-            <ol className="home-flow-steps">
-              <li>
-                <span className="home-flow-num" aria-hidden>
-                  1
-                </span>
-                <div>
-                  <h3>{t('homeFlowStep1Title')}</h3>
-                  <p>{t('homeFlowStep1Body')}</p>
-                </div>
-              </li>
-              <li>
-                <span className="home-flow-num" aria-hidden>
-                  2
-                </span>
-                <div>
-                  <h3>{t('homeFlowStep2Title')}</h3>
-                  <p>{t('homeFlowStep2Body')}</p>
-                </div>
-              </li>
-              <li>
-                <span className="home-flow-num" aria-hidden>
-                  3
-                </span>
-                <div>
-                  <h3>{t('homeFlowStep3Title')}</h3>
-                  <p>{t('homeFlowStep3Body')}</p>
-                </div>
-              </li>
-            </ol>
+            ) : (
+              <div className="home-event-list">
+                {myGatherings.map((g) => (
+                  <Link
+                    key={g.id}
+                    viewTransition
+                    className="home-event-card"
+                    to={`/events/${g.id}`}
+                  >
+                    <strong>{g.title}</strong>
+                    <span>
+                      {formatDate(g.date, localeTag, t('dateTbd'))}
+                      {g.time ? ` · ${g.time}` : ''}
+                    </span>
+                    <span>{g.location || t('locationTbd')}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </section>
+        )}
 
-          <section className="home-glimpse" aria-labelledby="home-glimpse-title">
-            <div className="home-glimpse-copy">
-              <h2 id="home-glimpse-title">{t('homeGlimpseTitle')}</h2>
-              <p className="home-section-lede">{t('homeGlimpseLede')}</p>
-            </div>
-            <div className="home-glimpse-stage" aria-hidden>
-              <div className="home-glimpse-window">
-                <div className="home-glimpse-chrome">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-                <div className="home-glimpse-body">
-                  <p className="home-glimpse-kicker">{t('homeGlimpseMockKicker')}</p>
-                  <p className="home-glimpse-event">{t('homeGlimpseMockTitle')}</p>
-                  <p className="home-glimpse-meta">{t('homeGlimpseMockMeta')}</p>
-                  <ul className="home-glimpse-guests">
-                    <li>
-                      <span>{t('homeGlimpseGuest1')}</span>
-                      <em>{t('homeGlimpseGuest1Status')}</em>
-                    </li>
-                    <li>
-                      <span>{t('homeGlimpseGuest2')}</span>
-                      <em>{t('homeGlimpseGuest2Status')}</em>
-                    </li>
-                    <li>
-                      <span>{t('homeGlimpseGuest3')}</span>
-                      <em className="is-pending">{t('homeGlimpseGuest3Status')}</em>
-                    </li>
-                  </ul>
-                  <div className="home-glimpse-link">
-                    <span>{t('homeGlimpseMockLink')}</span>
+        {mode === 'choose' && user && deviceOnlyEvents.length > 0 && (
+          <section
+            className="panel home-device-events"
+            aria-labelledby="home-device-events-title"
+          >
+            <h2 id="home-device-events-title">{t('authDeviceEvents')}</h2>
+            <p className="sub">{t('authDeviceEventsSub')}</p>
+            <div className="home-event-list">
+              {deviceOnlyEvents.map((g) => (
+                <div key={g.id} className="home-event-card home-event-card-row">
+                  <div>
+                    <strong>{g.title}</strong>
+                    <span>
+                      {formatDate(g.date, localeTag, t('dateTbd'))}
+                      {g.time ? ` · ${g.time}` : ''}
+                    </span>
+                  </div>
+                  <div className="row-actions">
+                    <Link
+                      viewTransition
+                      className="btn btn-ghost btn-sm"
+                      to={`/events/${g.id}`}
+                    >
+                      {t('openWithCode')}
+                    </Link>
+                    {!ownsGathering(g.id) && (
+                      <button
+                        type="button"
+                        className="btn btn-accent btn-sm"
+                        disabled={claimBusyId === g.id}
+                        onClick={() => void claimDeviceEvent(g.id)}
+                      >
+                        {claimBusyId === g.id ? t('saving') : t('authAddToAccount')}
+                      </button>
+                    )}
                   </div>
                 </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {mode === 'choose' && !user && (
+          <>
+            <section className="home-flow" aria-labelledby="home-flow-title">
+              <h2 id="home-flow-title">{t('homeFlowTitle')}</h2>
+              <p className="home-section-lede">{t('homeFlowLede')}</p>
+              <ol className="home-flow-steps">
+                <li>
+                  <span className="home-flow-num" aria-hidden>
+                    1
+                  </span>
+                  <div>
+                    <h3>{t('homeFlowStep1Title')}</h3>
+                    <p>{t('homeFlowStep1Body')}</p>
+                  </div>
+                </li>
+                <li>
+                  <span className="home-flow-num" aria-hidden>
+                    2
+                  </span>
+                  <div>
+                    <h3>{t('homeFlowStep2Title')}</h3>
+                    <p>{t('homeFlowStep2Body')}</p>
+                  </div>
+                </li>
+                <li>
+                  <span className="home-flow-num" aria-hidden>
+                    3
+                  </span>
+                  <div>
+                    <h3>{t('homeFlowStep3Title')}</h3>
+                    <p>{t('homeFlowStep3Body')}</p>
+                  </div>
+                </li>
+              </ol>
+            </section>
+
+            <section className="home-glimpse" aria-labelledby="home-glimpse-title">
+              <div className="home-glimpse-copy">
+                <h2 id="home-glimpse-title">{t('homeGlimpseTitle')}</h2>
+                <p className="home-section-lede">{t('homeGlimpseLede')}</p>
               </div>
-            </div>
-          </section>
+              <div className="home-glimpse-stage">
+                <InviteCard
+                  gathering={demoGathering}
+                  compact
+                  footer={t('alreadyComing', { count: 2 })}
+                  className="home-glimpse-invite"
+                />
+              </div>
+            </section>
 
-          <section className="home-about" aria-labelledby="home-about-title">
-            <h2 id="home-about-title">{t('homeAboutTitle')}</h2>
-            <p className="home-section-lede">{t('homeAboutLede')}</p>
-            <div className="home-about-grid">
-              <article>
-                <h3>{t('homeAboutMenuTitle')}</h3>
-                <p>{t('homeAboutMenuBody')}</p>
-              </article>
-              <article>
-                <h3>{t('homeAboutRsvpTitle')}</h3>
-                <p>{t('homeAboutRsvpBody')}</p>
-              </article>
-              <article>
-                <h3>{t('homeAboutMoneyTitle')}</h3>
-                <p>{t('homeAboutMoneyBody')}</p>
-              </article>
-            </div>
-          </section>
+            <section className="home-about" aria-labelledby="home-about-title">
+              <h2 id="home-about-title">{t('homeAboutTitle')}</h2>
+              <p className="home-section-lede">{t('homeAboutLede')}</p>
+              <div className="home-about-grid">
+                <article>
+                  <h3>{t('homeAboutMenuTitle')}</h3>
+                  <p>{t('homeAboutMenuBody')}</p>
+                </article>
+                <article>
+                  <h3>{t('homeAboutRsvpTitle')}</h3>
+                  <p>{t('homeAboutRsvpBody')}</p>
+                </article>
+                <article>
+                  <h3>{t('homeAboutMoneyTitle')}</h3>
+                  <p>{t('homeAboutMoneyBody')}</p>
+                </article>
+              </div>
+            </section>
 
-          <section className="home-close" aria-labelledby="home-close-title">
-            <h2 id="home-close-title">{t('homeCloseTitle')}</h2>
-            <p className="home-section-lede">{t('homeCloseLede')}</p>
-            <div className="home-close-actions">
-              {authConfigured && !user && (
-                <a className="btn btn-accent" href={authApi.googleStartUrl}>
-                  {t('authSignInGoogle')}
-                </a>
-              )}
-              <button
-                className="btn btn-accent"
-                type="button"
-                onClick={() => {
-                  setMode('create')
-                  window.scrollTo({ top: 0, behavior: 'smooth' })
-                }}
-              >
-                {t('createEvent')}
-              </button>
-              <button
-                className="btn btn-ghost"
-                type="button"
-                onClick={() => {
-                  setMode('code')
-                  setAccessError(null)
-                  window.scrollTo({ top: 0, behavior: 'smooth' })
-                }}
-              >
-                {t('enterOrganizerCode')}
-              </button>
-            </div>
-          </section>
-        </>
-      )}
+            <section className="home-close" aria-labelledby="home-close-title">
+              <h2 id="home-close-title">{t('homeCloseTitle')}</h2>
+              <p className="home-section-lede">{t('homeCloseLede')}</p>
+              <div className="home-close-actions">
+                <button className="btn btn-accent" type="button" onClick={startCreate}>
+                  {t('createEvent')}
+                </button>
+                {authConfigured && (
+                  <a className="btn btn-ghost" href={authApi.googleStartUrl}>
+                    {t('authSignInGoogle')}
+                  </a>
+                )}
+                <button className="btn btn-ghost" type="button" onClick={startCode}>
+                  {t('findMyEvent')}
+                </button>
+              </div>
+            </section>
+          </>
+        )}
 
-      <footer className="site-footer">
-        <div className="site-footer-main">
-          <div className="site-footer-brand">
-            <strong>
-              Round<span>.</span>
-            </strong>
-            <p>{t('footerTagline')}</p>
+        <footer className="site-footer">
+          <div className="site-footer-main">
+            <div className="site-footer-brand">
+              <strong>
+                Round<span>.</span>
+              </strong>
+              <p>{t('footerTagline')}</p>
+            </div>
+            <nav className="site-footer-nav" aria-label={t('footerNavLabel')}>
+              <details className="site-footer-disclosure">
+                <summary>{t('footerPrivacyTitle')}</summary>
+                <p>{t('footerPrivacyBody')}</p>
+              </details>
+              <details className="site-footer-disclosure">
+                <summary>{t('footerDisclaimerTitle')}</summary>
+                <p>{t('footerDisclaimerBody')}</p>
+              </details>
+              <details className="site-footer-disclosure">
+                <summary>{t('footerTermsTitle')}</summary>
+                <p>{t('footerTermsBody')}</p>
+              </details>
+            </nav>
           </div>
-          <nav className="site-footer-nav" aria-label={t('footerNavLabel')}>
-            <details className="site-footer-disclosure">
-              <summary>{t('footerPrivacyTitle')}</summary>
-              <p>{t('footerPrivacyBody')}</p>
-            </details>
-            <details className="site-footer-disclosure">
-              <summary>{t('footerDisclaimerTitle')}</summary>
-              <p>{t('footerDisclaimerBody')}</p>
-            </details>
-            <details className="site-footer-disclosure">
-              <summary>{t('footerTermsTitle')}</summary>
-              <p>{t('footerTermsBody')}</p>
-            </details>
-          </nav>
-        </div>
-        <p className="site-footer-copy">
-          {t('footerCopyright', { year: new Date().getFullYear() })}
-        </p>
-      </footer>
+          <p className="site-footer-copy">
+            {t('footerCopyright', { year: new Date().getFullYear() })}
+          </p>
+        </footer>
+      </div>
     </>
   )
 }
