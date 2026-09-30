@@ -37,7 +37,7 @@ export function formatDate(date: string, locale = 'pt-PT', dateTbd = 'Date TBD')
 
 export function createMemberDraft(partial?: Partial<GroupMember>): GroupMember {
   return {
-    id: `m_${crypto.randomUUID().slice(0, 8)}`,
+    id: `m_${crypto.randomUUID().replace(/-/g, '')}`,
     name: '',
     menuItemIds: [],
     carteItemIds: [],

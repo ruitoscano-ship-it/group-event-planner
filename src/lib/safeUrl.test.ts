@@ -6,7 +6,7 @@ describe('safeMediaUrl', () => {
     expect(safeMediaUrl('https://cdn.example.com/menu.jpg')).toBe(
       'https://cdn.example.com/menu.jpg',
     )
-    expect(safeMediaUrl('http://example.com/a.png')).toBe('http://example.com/a.png')
+    expect(safeMediaUrl('http://example.com/a.png')).toBe('')
   })
 
   it('allows approved data:image URLs', () => {

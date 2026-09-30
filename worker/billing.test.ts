@@ -17,14 +17,16 @@ describe('preserveMemberBilling', () => {
     ])
   })
 
-  it('leaves new members unchanged and ignores empty previous', () => {
-    const next = [{ id: 'm3', name: 'New', amountPaid: 0, extraAmount: 5 }]
-    expect(preserveMemberBilling(next, undefined)).toEqual(next)
+  it('zeros billing for new members and empty previous', () => {
+    const next = [{ id: 'm3', name: 'New', amountPaid: 40, extraAmount: 5 }]
+    expect(preserveMemberBilling(next, undefined)).toEqual([
+      { id: 'm3', name: 'New', amountPaid: 0, extraAmount: 0 },
+    ])
     expect(
       preserveMemberBilling(next, [
         { id: 'm1', name: 'Old', amountPaid: 10, extraAmount: 0 },
       ]),
-    ).toEqual(next)
+    ).toEqual([{ id: 'm3', name: 'New', amountPaid: 0, extraAmount: 0 }])
   })
 
   it('clamps negative billing to zero', () => {

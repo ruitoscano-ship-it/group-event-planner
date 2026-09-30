@@ -46,7 +46,7 @@ async function hmacHex(secret: string, message: string): Promise<string> {
 }
 
 function newId(prefix: string): string {
-  return `${prefix}_${crypto.randomUUID().slice(0, 8)}`
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, '')}`
 }
 
 export function googleAuthConfigured(env: OrganizerAuthEnv): boolean {

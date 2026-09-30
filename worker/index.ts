@@ -16,6 +16,7 @@ import {
 } from './adminAuth'
 import { preserveMemberBilling } from './billing'
 import {
+  codesMatch,
   formatOrganizerCode,
   generateOrganizerCode,
   normalizeOrganizerCode,
@@ -95,11 +96,13 @@ function rateLimit(
 }
 
 function newId(prefix: string): string {
-  return `${prefix}_${crypto.randomUUID().slice(0, 8)}`
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, '')}`
 }
 
 function newGuestKey(): string {
-  return crypto.randomUUID().replace(/-/g, '')
+  const a = crypto.randomUUID().replace(/-/g, '')
+  const b = crypto.randomUUID().replace(/-/g, '')
+  return `${a}${b}`
 }
 
 function isGuestRsvpOpen(gathering: Gathering): boolean {
@@ -126,7 +129,7 @@ function clip(value: unknown, max: number): string {
     .slice(0, max)
 }
 
-/** Allow https/http image links or data:image/*;block javascript: and odd schemes. */
+/** Allow https image links or data:image/*; block http, javascript:, credentials. */
 function sanitizeMenuCardUrl(raw: string): string | { error: string } {
   const urlValue = String(raw || '').trim()
   if (!urlValue) return ''
@@ -141,8 +144,8 @@ function sanitizeMenuCardUrl(raw: string): string | { error: string } {
   }
   try {
     const parsed = new URL(urlValue)
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      return { error: 'Menu card link must be http(s).' }
+    if (parsed.protocol !== 'https:') {
+      return { error: 'Menu card link must be https.' }
     }
     if (parsed.username || parsed.password) {
       return { error: 'Menu card link cannot include credentials.' }
@@ -158,11 +161,9 @@ function readOrganizerCodeHeader(request: Request): string {
 }
 
 function isOrganizerCodeAuthorized(request: Request, gathering: Gathering): boolean {
-  const stored = normalizeOrganizerCode(gathering.organizerCode || '')
   // No code on record: not authorized until unlock assigns one
-  if (!stored) return false
-  const provided = readOrganizerCodeHeader(request)
-  return Boolean(provided) && provided === stored
+  if (!normalizeOrganizerCode(gathering.organizerCode || '')) return false
+  return codesMatch(readOrganizerCodeHeader(request), gathering.organizerCode || '')
 }
 
 async function canManageOrganizer(
@@ -237,6 +238,7 @@ function toClientGathering(
   return {
     ...rest,
     organizerCode: undefined,
+    ownerUserId: null,
     organizerEmail: '',
     organizerPhone: '',
     messages: [],
@@ -357,7 +359,7 @@ async function findGatheringByOrganizerCode(
   for (const row of results ?? []) {
     try {
       const gathering = normalizeGathering(JSON.parse(row.data) as Gathering)
-      if (normalizeOrganizerCode(gathering.organizerCode) === needle) {
+      if (codesMatch(gathering.organizerCode, needle)) {
         return gathering
       }
     } catch {
@@ -368,7 +370,7 @@ async function findGatheringByOrganizerCode(
 }
 
 async function readGathering(db: D1Database, id: string): Promise<Gathering | null> {
-  if (!id || id.length > 80) return null
+  if (!id || id.length > 96) return null
   const row = await db
     .prepare('SELECT data FROM gatherings WHERE id = ?')
     .bind(id)
@@ -531,8 +533,14 @@ async function readJsonBody<T>(request: Request): Promise<T | Response> {
     return error('Request body too large', 413)
   }
   try {
-    return (await request.json()) as T
-  } catch {
+    const text = await request.text()
+    if (text.length > MAX_JSON_BYTES) {
+      return error('Request body too large', 413)
+    }
+    if (!text.trim()) return error('Invalid JSON body')
+    return JSON.parse(text) as T
+  } catch (err) {
+    if (err instanceof Response) return err
     return error('Invalid JSON body')
   }
 }
@@ -704,10 +712,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const bodyOrErr = await readJsonBody<{ code?: string }>(request)
     if (bodyOrErr instanceof Response) return bodyOrErr
     const code = normalizeOrganizerCode(bodyOrErr.code || '')
-    if (
-      !code ||
-      code !== normalizeOrganizerCode(gathering.organizerCode || '')
-    ) {
+    if (!codesMatch(code, gathering.organizerCode || '')) {
       return error('Invalid organizer code', 401)
     }
     if (gathering.ownerUserId && gathering.ownerUserId !== user.id) {
@@ -723,6 +728,8 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
   }
 
   if (path === '/api/gatherings' && method === 'GET') {
+    const limited = rateLimit(request, 'list', 60, 60_000)
+    if (limited) return limited
     const idsParam = url.searchParams.get('ids')
     if (!idsParam) return json([])
     const ids = idsParam
@@ -846,6 +853,8 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     const id = decodeURIComponent(gatheringMatch[1])
 
     if (method === 'GET') {
+      const limited = rateLimit(request, 'get', 120, 60_000)
+      if (limited) return limited
       const gathering = await readGathering(env.DB, id)
       if (!gathering) return error('Gathering not found', 404)
       const authorized = await canManageOrganizer(request, env, gathering)
@@ -965,16 +974,21 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (bodyOrErr instanceof Response) return bodyOrErr
     const code = normalizeOrganizerCode(bodyOrErr.code || '')
     if (!gathering.organizerCode) {
-      // Legacy event: assign a code now so future access is protected
-      const assigned = code.length >= 6 ? code : generateOrganizerCode()
-      gathering.organizerCode = formatOrganizerCode(assigned)
+      // Legacy event: require an explicit code — never unlock with empty input
+      if (code.length < 6) {
+        return error(
+          'Provide a code of at least 6 characters to protect this event',
+          400,
+        )
+      }
+      gathering.organizerCode = formatOrganizerCode(code)
       await writeGathering(env.DB, gathering, false)
       return json({
         gathering: toClientGathering(gathering, true),
         organizerCode: gathering.organizerCode,
       })
     }
-    if (!code || code !== normalizeOrganizerCode(gathering.organizerCode)) {
+    if (!codesMatch(code, gathering.organizerCode)) {
       return error('Invalid organizer code', 401)
     }
     const sessionUser = await getSessionUser(env, request)
@@ -1166,9 +1180,12 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
         return error('A guest with this email already RSVPed for this event', 409)
       }
       const current = gathering.attendees[existingIdx]
-      const providedKey = clip(body.guestKey, 64)
-      // Require guestKey when the record already has one (prevents RSVP takeover by email alone)
-      if (current.guestKey && providedKey !== current.guestKey) {
+      const providedKey = clip(body.guestKey, 128)
+      // Guests must prove possession of guestKey (blocks email-only takeover, including legacy empty keys)
+      if (
+        !asOrganizer &&
+        (!current.guestKey || !providedKey || providedKey !== current.guestKey)
+      ) {
         return error(
           'This email already has an RSVP. Update from the same device, or contact the organizer.',
           403,
@@ -1269,11 +1286,12 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     if (!gathering) return error('Gathering not found', 404)
 
     if (method === 'PATCH') {
+      if (gathering.archivedAt) {
+        const asOrg = await canManageOrganizer(request, env, gathering)
+        if (!asOrg) return error('This event is archived', 410)
+      }
       const asOrganizer = await canManageOrganizer(request, env, gathering)
-      const guestKeyHeader =
-        request.headers.get('X-Guest-Key') ||
-        new URL(request.url).searchParams.get('guestKey') ||
-        ''
+      const guestKeyHeader = request.headers.get('X-Guest-Key') || ''
       const bodyOrErr = await readJsonBody<
         Partial<Attendee> & { paymentClaimed?: boolean }
       >(request)
@@ -1402,11 +1420,12 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     }
 
     if (method === 'DELETE') {
+      if (gathering.archivedAt) {
+        const asOrg = await canManageOrganizer(request, env, gathering)
+        if (!asOrg) return error('This event is archived', 410)
+      }
       const asOrganizer = await canManageOrganizer(request, env, gathering)
-      const guestKeyHeader =
-        request.headers.get('X-Guest-Key') ||
-        new URL(request.url).searchParams.get('guestKey') ||
-        ''
+      const guestKeyHeader = request.headers.get('X-Guest-Key') || ''
       const idx = gathering.attendees.findIndex((a) => a.id === attendeeId)
       if (idx === -1) return error('Attendee not found', 404)
       const current = gathering.attendees[idx]

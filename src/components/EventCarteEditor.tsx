@@ -9,7 +9,7 @@ type Props = {
 }
 
 function newCarteId(): string {
-  return `carte_${crypto.randomUUID().slice(0, 8)}`
+  return `carte_${crypto.randomUUID().replace(/-/g, '')}`
 }
 
 function fromLines(lines: string[]): CarteItem[] {
