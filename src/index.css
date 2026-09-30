@@ -407,12 +407,12 @@ body[data-demo-open='1'] .rsvp-sticky {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  width: min(34rem, 100%);
+  width: var(--home-rail, min(1160px, calc(100% - 2.3rem)));
+  margin-inline: auto;
   padding:
     calc(5.5rem + env(safe-area-inset-top, 0px))
-    max(1.25rem, env(safe-area-inset-right, 0px))
-    calc(2.25rem + env(safe-area-inset-bottom, 0px))
-    max(1.25rem, env(safe-area-inset-left, 0px));
+    0
+    calc(2.25rem + env(safe-area-inset-bottom, 0px));
   animation: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -420,6 +420,7 @@ body[data-demo-open='1'] .rsvp-sticky {
   font-size: clamp(3.6rem, 12vw, 6.5rem);
   line-height: 0.88;
   margin: 0 0 0.85rem;
+  max-width: 20rem;
   color: #fff;
   text-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
 }
@@ -429,8 +430,8 @@ body[data-demo-open='1'] .rsvp-sticky {
 }
 
 .landing .hero-lede {
-  margin: 0 0 1.5rem;
-  max-width: 26rem;
+  margin: 0 0 1.35rem;
+  max-width: 20rem;
   font-size: clamp(1.05rem, 2.4vw, 1.22rem);
   line-height: 1.45;
   color: rgba(255, 255, 255, 0.9);
@@ -439,7 +440,7 @@ body[data-demo-open='1'] .rsvp-sticky {
 .landing-actions {
   display: grid;
   gap: 0.65rem;
-  max-width: 20rem;
+  width: min(100%, 20rem);
 }
 
 .landing-action {
@@ -459,7 +460,7 @@ body[data-demo-open='1'] .rsvp-sticky {
 }
 
 .home-body {
-  width: min(1160px, calc(100% - 2rem));
+  width: var(--home-rail, min(1160px, calc(100% - 2.3rem)));
   margin: 0 auto;
   padding: 0 0 0.5rem;
 }
@@ -530,6 +531,7 @@ a.home-event-card:hover {
 
 .landing-panel {
   margin-top: 0.35rem;
+  width: min(100%, 26rem);
   padding: 1.1rem 1.15rem 1.2rem;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.97);
@@ -591,16 +593,30 @@ body[data-page='home'] .app-shell {
   padding-top: 0;
 }
 
+body[data-page='home'] {
+  --home-gutter: max(1.15rem, env(safe-area-inset-left, 0px));
+  --home-rail: min(1160px, calc(100% - (2 * var(--home-gutter))));
+}
+
 .topbar-home {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   z-index: 20;
-  width: min(1160px, calc(100% - 2rem));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: var(--home-rail);
   margin: 0 auto;
-  padding-top: calc(0.85rem + env(safe-area-inset-top, 0px));
+  padding: calc(0.85rem + env(safe-area-inset-top, 0px)) 0 0;
+  border: 0;
+  border-radius: 0;
   background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+  animation: none;
 }
 
 .topbar-home .brand-mark-only {
@@ -608,6 +624,7 @@ body[data-page='home'] .app-shell {
   align-items: center;
   font-size: 0;
   color: #fff;
+  padding-left: 0;
 }
 
 .topbar-home .brand-mark {
@@ -615,6 +632,13 @@ body[data-page='home'] .app-shell {
   height: 1.65rem;
   background: #fff;
   box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.22);
+}
+
+.topbar-home .nav-actions {
+  width: auto;
+  max-width: none;
+  flex: 0 0 auto;
+  justify-content: flex-end;
 }
 
 .topbar-home .btn-ghost {
@@ -649,10 +673,39 @@ body[data-page='home'] .app-shell {
 .home-auth-banner {
   position: relative;
   z-index: 25;
-  margin: calc(4.25rem + env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-left, 0px)) 0;
+  width: var(--home-rail);
+  margin: calc(4.25rem + env(safe-area-inset-top, 0px)) auto 0;
 }
 
 @media (max-width: 860px) {
+  .topbar-home,
+  body[data-page='home'] .topbar.topbar-home {
+    display: flex;
+    grid-template-columns: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: var(--home-rail);
+    margin: 0 auto;
+    padding: calc(0.75rem + env(safe-area-inset-top, 0px)) 0 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .topbar-home .brand,
+  .topbar-home .brand-mark-only {
+    justify-self: auto;
+  }
+
+  .topbar-home .nav-actions {
+    width: auto;
+    max-width: none;
+    flex: 0 0 auto;
+    justify-content: flex-end;
+  }
+
   .landing {
     min-height: 100svh;
     align-items: end;
@@ -669,10 +722,11 @@ body[data-page='home'] .app-shell {
   }
 
   .landing-copy {
-    width: 100%;
+    width: var(--home-rail);
+    margin-inline: auto;
     padding:
       calc(5rem + env(safe-area-inset-top, 0px))
-      1.15rem
+      0
       calc(1.75rem + env(safe-area-inset-bottom, 0px));
   }
 
@@ -688,10 +742,12 @@ body[data-page='home'] .app-shell {
 
   .landing-actions {
     max-width: none;
+    width: 100%;
   }
 
   .landing-panel {
     max-height: none;
+    width: 100%;
   }
 
   .landing-panel-head {
@@ -705,11 +761,7 @@ body[data-page='home'] .app-shell {
   }
 
   .home-body {
-    width: min(100%, calc(100% - 1.25rem));
-  }
-
-  .topbar-home {
-    width: min(100%, calc(100% - 1.25rem));
+    width: var(--home-rail);
   }
 }
 
