@@ -158,6 +158,27 @@ export const api = {
       },
     )
   },
+  reportOcrEvent(
+    gatheringId: string,
+    payload: {
+      status: 'success' | 'no_text' | 'error'
+      errorMessage?: string
+      menuCardKind?: string
+      lineCount?: number
+      durationMs?: number
+      clientLocale?: string
+    },
+    organizerCode?: string | null,
+  ) {
+    return request<{ ok: boolean; id: string }>(
+      `/api/gatherings/${encodeURIComponent(gatheringId)}/ocr-events`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        organizerCode: withCode(gatheringId, organizerCode),
+      },
+    )
+  },
   removeMenuItem(
     gatheringId: string,
     itemId: string,

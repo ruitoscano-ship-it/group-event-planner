@@ -29,6 +29,22 @@ export type AdminEventSummary = {
 
 export type AdminFilter = 'all' | 'active' | 'archived' | 'past' | 'recent'
 
+export type AdminOcrEvent = {
+  id: string
+  gatheringId: string
+  gatheringTitle: string
+  createdAt: string
+  status: string
+  errorMessage: string
+  menuCardKind: string
+  lineCount: number
+  durationMs: number
+  clientLocale: string
+  userAgent: string
+}
+
+export type AdminOcrFilter = 'problems' | 'error' | 'no_text' | 'success' | 'all'
+
 const TOKEN_KEY = 'round-admin-token-v1'
 
 export function loadAdminToken(): string | null {
@@ -105,6 +121,11 @@ export const adminApi = {
     return adminRequest<{ deleted: number; matched: number }>(
       '/api/admin/events/purge-past',
       { method: 'POST', body: JSON.stringify({ onlyArchived }) },
+    )
+  },
+  listOcrEvents(status: AdminOcrFilter = 'problems', limit = 50) {
+    return adminRequest<{ events: AdminOcrEvent[]; generatedAt: string }>(
+      `/api/admin/ocr-events?status=${encodeURIComponent(status)}&limit=${limit}`,
     )
   },
 }

@@ -1089,6 +1089,52 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     return json(toClientGathering(gathering, true))
   }
 
+  const ocrEventsMatch = path.match(/^\/api\/gatherings\/([^/]+)\/ocr-events$/)
+  if (ocrEventsMatch && method === 'POST') {
+    const id = decodeURIComponent(ocrEventsMatch[1])
+    const gathering = await readGathering(env.DB, id)
+    if (!gathering) return error('Gathering not found', 404)
+    const denied = await requireOrganizer(request, env, gathering)
+    if (denied) return denied
+    const limited = rateLimit(request, `ocr-log:${id}`, 30, 60_000)
+    if (limited) return limited
+    const bodyOrErr = await readJsonBody<{
+      status?: string
+      errorMessage?: string
+      menuCardKind?: string
+      lineCount?: number
+      durationMs?: number
+      clientLocale?: string
+    }>(request)
+    if (bodyOrErr instanceof Response) return bodyOrErr
+    const statusRaw = String(bodyOrErr.status || '').toLowerCase()
+    const status =
+      statusRaw === 'success' || statusRaw === 'no_text' || statusRaw === 'error'
+        ? statusRaw
+        : 'error'
+    const eventId = newId('ocr')
+    const createdAt = new Date().toISOString()
+    await env.DB.prepare(
+      `INSERT INTO ocr_events
+        (id, gathering_id, created_at, status, error_message, menu_card_kind, line_count, duration_ms, client_locale, user_agent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        eventId,
+        id,
+        createdAt,
+        status,
+        clip(bodyOrErr.errorMessage, 400),
+        clip(bodyOrErr.menuCardKind, 80),
+        Math.max(0, Math.min(500, Number(bodyOrErr.lineCount) || 0)),
+        Math.max(0, Math.min(600_000, Number(bodyOrErr.durationMs) || 0)),
+        clip(bodyOrErr.clientLocale, 16),
+        clip(request.headers.get('user-agent') || '', 180),
+      )
+      .run()
+    return json({ ok: true, id: eventId }, 201)
+  }
+
   const menuMatch = path.match(/^\/api\/gatherings\/([^/]+)\/menu$/)
   if (menuMatch && method === 'POST') {
     const id = decodeURIComponent(menuMatch[1])
@@ -1572,6 +1618,73 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     return json({ events: rows, generatedAt: new Date().toISOString() })
   }
 
+  if (path === '/api/admin/ocr-events' && method === 'GET') {
+    const denied = await requireAdmin(request, env)
+    if (denied) return denied
+    const statusFilter = (url.searchParams.get('status') || 'problems').toLowerCase()
+    const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 50))
+    let sql = `SELECT o.id, o.gathering_id, o.created_at, o.status, o.error_message,
+                      o.menu_card_kind, o.line_count, o.duration_ms, o.client_locale, o.user_agent,
+                      g.data AS gathering_data
+               FROM ocr_events o
+               LEFT JOIN gatherings g ON g.id = o.gathering_id`
+    const binds: Array<string | number> = []
+    if (statusFilter === 'error') {
+      sql += ` WHERE o.status = ?`
+      binds.push('error')
+    } else if (statusFilter === 'no_text') {
+      sql += ` WHERE o.status = ?`
+      binds.push('no_text')
+    } else if (statusFilter === 'success') {
+      sql += ` WHERE o.status = ?`
+      binds.push('success')
+    } else if (statusFilter === 'problems') {
+      sql += ` WHERE o.status IN ('error', 'no_text')`
+    }
+    sql += ` ORDER BY o.created_at DESC LIMIT ?`
+    binds.push(limit)
+    const result = await env.DB.prepare(sql)
+      .bind(...binds)
+      .all<{
+        id: string
+        gathering_id: string
+        created_at: string
+        status: string
+        error_message: string
+        menu_card_kind: string
+        line_count: number
+        duration_ms: number
+        client_locale: string
+        user_agent: string
+        gathering_data: string | null
+      }>()
+    const events = (result.results || []).map((row) => {
+      let title = ''
+      try {
+        if (row.gathering_data) {
+          const data = JSON.parse(row.gathering_data) as { title?: string }
+          title = clip(data.title || '', 120)
+        }
+      } catch {
+        title = ''
+      }
+      return {
+        id: row.id,
+        gatheringId: row.gathering_id,
+        gatheringTitle: title || row.gathering_id,
+        createdAt: row.created_at,
+        status: row.status,
+        errorMessage: row.error_message || '',
+        menuCardKind: row.menu_card_kind || '',
+        lineCount: Number(row.line_count) || 0,
+        durationMs: Number(row.duration_ms) || 0,
+        clientLocale: row.client_locale || '',
+        userAgent: row.user_agent || '',
+      }
+    })
+    return json({ events, generatedAt: new Date().toISOString() })
+  }
+
   if (path === '/api/admin/events/purge-past' && method === 'POST') {
     const denied = await requireAdmin(request, env)
     if (denied) return denied
@@ -1586,6 +1699,9 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     })
     let deleted = 0
     for (const row of targets) {
+      await env.DB.prepare('DELETE FROM ocr_events WHERE gathering_id = ?')
+        .bind(row.id)
+        .run()
       const result = await env.DB.prepare('DELETE FROM gatherings WHERE id = ?')
         .bind(row.id)
         .run()
@@ -1645,6 +1761,9 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     }
 
     if (method === 'DELETE') {
+      await env.DB.prepare('DELETE FROM ocr_events WHERE gathering_id = ?')
+        .bind(id)
+        .run()
       const result = await env.DB.prepare('DELETE FROM gatherings WHERE id = ?')
         .bind(id)
         .run()

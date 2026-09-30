@@ -9,6 +9,8 @@ import {
   saveAdminToken,
   type AdminEventSummary,
   type AdminFilter,
+  type AdminOcrEvent,
+  type AdminOcrFilter,
   type AdminStats,
 } from '../lib/adminApi'
 import { formatDate } from '../lib/money'
@@ -30,8 +32,10 @@ export function AdminPage() {
   const [loginBusy, setLoginBusy] = useState(false)
   const [loginError, setLoginError] = useState<string | null>(null)
   const [filter, setFilter] = useState<AdminFilter>('all')
+  const [ocrFilter, setOcrFilter] = useState<AdminOcrFilter>('problems')
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [events, setEvents] = useState<AdminEventSummary[]>([])
+  const [ocrEvents, setOcrEvents] = useState<AdminOcrEvent[]>([])
   const [loading, setLoading] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [banner, setBanner] = useState<string | null>(null)
@@ -42,12 +46,14 @@ export function AdminPage() {
     setLoading(true)
     setError(null)
     try {
-      const [nextStats, list] = await Promise.all([
+      const [nextStats, list, ocrList] = await Promise.all([
         adminApi.stats(),
         adminApi.listEvents(filter),
+        adminApi.listOcrEvents(ocrFilter, 50),
       ])
       setStats(nextStats)
       setEvents(list.events)
+      setOcrEvents(ocrList.events)
     } catch (err) {
       const message = err instanceof Error ? err.message : t('adminLoadFailed')
       setError(message)
@@ -58,7 +64,7 @@ export function AdminPage() {
     } finally {
       setLoading(false)
     }
-  }, [filter, t])
+  }, [filter, ocrFilter, t])
 
   useEffect(() => {
     if (token) void refresh()
@@ -86,6 +92,7 @@ export function AdminPage() {
     setToken(null)
     setStats(null)
     setEvents([])
+    setOcrEvents([])
     setBanner(null)
   }
 
@@ -409,6 +416,111 @@ export function AdminPage() {
             </table>
           )}
         </div>
+
+        <section className="admin-ocr-section panel" aria-labelledby="admin-ocr-title">
+          <div className="admin-ocr-head">
+            <div>
+              <h2 id="admin-ocr-title">{t('adminOcrTitle')}</h2>
+              <p className="sub">{t('adminOcrSub')}</p>
+            </div>
+            <div className="admin-filters" role="tablist" aria-label={t('adminOcrFilters')}>
+              {(
+                [
+                  ['problems', 'adminOcrFilterProblems'],
+                  ['error', 'adminOcrFilterError'],
+                  ['no_text', 'adminOcrFilterNoText'],
+                  ['success', 'adminOcrFilterSuccess'],
+                  ['all', 'adminOcrFilterAll'],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={ocrFilter === key}
+                  className={`admin-filter ${ocrFilter === key ? 'on' : ''}`}
+                  onClick={() => setOcrFilter(key)}
+                >
+                  {t(label)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {ocrEvents.length === 0 ? (
+            <div className="empty">
+              {loading ? t('saving') : t('adminOcrEmpty')}
+            </div>
+          ) : (
+            <div className="admin-table-wrap">
+              <table className="admin-table admin-ocr-table">
+                <thead>
+                  <tr>
+                    <th>{t('adminOcrColWhen')}</th>
+                    <th>{t('adminOcrColEvent')}</th>
+                    <th>{t('adminOcrColStatus')}</th>
+                    <th>{t('adminOcrColDetail')}</th>
+                    <th>{t('adminColActions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ocrEvents.map((row) => (
+                    <tr key={row.id}>
+                      <td>{new Date(row.createdAt).toLocaleString(localeTag)}</td>
+                      <td>
+                        <strong>{row.gatheringTitle}</strong>
+                        <div className="admin-meta mono">{row.gatheringId}</div>
+                      </td>
+                      <td>
+                        <span
+                          className={`admin-pill ${
+                            row.status === 'success'
+                              ? 'active'
+                              : row.status === 'no_text'
+                                ? 'past'
+                                : 'archived'
+                          }`}
+                        >
+                          {row.status === 'success'
+                            ? t('adminOcrStatusSuccess')
+                            : row.status === 'no_text'
+                              ? t('adminOcrStatusNoText')
+                              : t('adminOcrStatusError')}
+                        </span>
+                        <div className="admin-meta">
+                          {row.lineCount > 0
+                            ? t('adminOcrLines', { count: row.lineCount })
+                            : null}
+                          {row.durationMs > 0
+                            ? ` · ${Math.round(row.durationMs / 100) / 10}s`
+                            : ''}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="admin-ocr-detail">
+                          {row.errorMessage || '—'}
+                        </div>
+                        <div className="admin-meta">
+                          {row.menuCardKind || '—'}
+                          {row.clientLocale ? ` · ${row.clientLocale}` : ''}
+                        </div>
+                      </td>
+                      <td>
+                        <Link
+                          viewTransition
+                          className="btn btn-ghost btn-sm"
+                          to={`/events/${row.gatheringId}`}
+                        >
+                          {t('adminOpen')}
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </section>
     </>
   )
