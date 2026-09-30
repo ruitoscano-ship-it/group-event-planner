@@ -5003,3 +5003,224 @@ body[data-menu-sheet-open='1'] {
     display: none;
   }
 }
+
+/* Market-grade invite + status */
+.invite-card {
+  position: relative;
+  margin: 0 0 1rem;
+  padding: 1.25rem 1.35rem 1.35rem;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(0, 163, 143, 0.18), transparent 55%),
+    linear-gradient(165deg, #0b3d36 0%, #0f5c52 48%, #147a6c 100%);
+  color: #f4fffc;
+  box-shadow: 0 12px 40px rgba(8, 40, 34, 0.22);
+  overflow: hidden;
+  animation: invite-card-enter 0.45s ease-out;
+}
+
+.invite-card-enter {
+  animation: invite-card-enter 0.45s ease-out;
+}
+
+@keyframes invite-card-enter {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.invite-card-title {
+  margin: 0.55rem 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.55rem, 4vw, 2rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.invite-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.invite-card-meta .chip {
+  background: rgba(255, 255, 255, 0.14);
+  color: #f4fffc;
+  border: 0;
+}
+
+.invite-card-meta .chip-warm {
+  background: rgba(255, 196, 120, 0.28);
+}
+
+.invite-card-where,
+.invite-card-host,
+.invite-card-notes,
+.invite-card-peek,
+.invite-card-footer {
+  margin: 0.35rem 0 0;
+  color: rgba(244, 255, 252, 0.86);
+}
+
+.invite-card a {
+  color: #b8ffe8;
+}
+
+.invite-card .sub {
+  color: rgba(244, 255, 252, 0.72);
+}
+
+.rsvp-shell-status,
+.rsvp-shell {
+  padding-bottom: 2rem;
+}
+
+.rsvp-start-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.rsvp-status-order {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1rem 0;
+}
+
+.rsvp-status-person {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 12px;
+  background: rgba(0, 107, 95, 0.06);
+}
+
+.rsvp-amount-due {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0.75rem 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 14px;
+  background: rgba(0, 163, 143, 0.1);
+  font-weight: 600;
+}
+
+.rsvp-amount-due strong {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.payment-copy-row dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.invite-share-primary {
+  margin: 1rem 0 0.65rem;
+}
+
+.invite-share-primary .btn {
+  width: 100%;
+  max-width: 22rem;
+}
+
+.invite-share-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.invite-link-mono {
+  margin-top: 0.85rem;
+  word-break: break-all;
+}
+
+.sticky-invite-cta {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  background: #0f5c52;
+  color: #f4fffc;
+  box-shadow: 0 10px 30px rgba(8, 40, 34, 0.28);
+  animation: sticky-cta-up 0.35s ease-out;
+}
+
+.sticky-invite-cta p {
+  margin: 0;
+  flex: 1 1 12rem;
+}
+
+@keyframes sticky-cta-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+
+.setup-accordion-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.setup-accordion-status span {
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--muted);
+}
+
+.setup-accordion-status span.done {
+  background: rgba(0, 163, 143, 0.14);
+  color: var(--teal-deep, #006b5f);
+}
+
+.topbar-more {
+  position: relative;
+}
+
+.topbar-more-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  z-index: 40;
+  display: grid;
+  gap: 0.25rem;
+  min-width: 10rem;
+  padding: 0.4rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 107, 95, 0.14);
+  box-shadow: 0 8px 24px rgba(0, 40, 30, 0.12);
+}
+
+.empty-with-cta {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+}
+
+.setup-step-collapsed .details-summary {
+  margin-top: 0.35rem;
+}
+
+.rsvp-success-panel {
+  animation: invite-card-enter 0.4s ease-out 0.05s both;
+}
+
+.rsvp-success-kicker::before {
+  content: '✓ ';
+  color: var(--teal-deep, #006b5f);
+}

@@ -5,6 +5,7 @@ import { EventCarteEditor } from '../components/EventCarteEditor'
 import { FirstEventCoach, type CoachStep } from '../components/FirstEventCoach'
 import { GuestEditor } from '../components/GuestEditor'
 import { ImageUploadDropzone } from '../components/ImageUploadDropzone'
+import { InviteCard } from '../components/InviteCard'
 import { KitchenBoard } from '../components/KitchenBoard'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { MenuPicker } from '../components/MenuPicker'
@@ -129,6 +130,8 @@ export function EventPage() {
   const [tab, setTab] = useState<Tab>('guests')
   const [phase, setPhase] = useState<Phase | null>(null)
   const [codePanelOpen, setCodePanelOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [showWalkUpQr, setShowWalkUpQr] = useState(false)
   const [copied, setCopied] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -840,9 +843,15 @@ export function EventPage() {
     gathering.menuCardUrl || (gathering.carteItems || []).length > 0,
   )
   const step3Done = gathering.menu.length > 0
-  const step4Done = shareDone
-  const payInfoDone = hasPaymentInstructions(gathering)
+  const setupReadyToInvite = step1Done && step3Done
   const rsvpOpen = isRsvpOpen(gathering)
+  const unpaidCount = gathering.attendees.filter((a) => {
+    if (a.isGroup && a.members?.length) {
+      return a.members.some((m) => (m.amountPaid || 0) <= 0)
+    }
+    return (a.amountPaid || 0) <= 0
+  }).length
+  const unreadInbox = (gathering.messages || []).filter((m) => !m.read).length
 
   return (
     <>
@@ -854,39 +863,57 @@ export function EventPage() {
         <div className="nav-actions">
           <LanguageSwitcher />
           {canManage && (
-            <button
-              className={`btn btn-sm ${coachStep ? 'btn-accent' : 'btn-ghost'}`}
-              type="button"
-              onClick={() => {
-                if (coachStep) {
-                  markAssistedComplete()
-                  setCoachStep(null)
-                  setSearchParams({}, { replace: true })
-                  return
-                }
-                resetAssistedMode()
-                setCoachStep('code')
-                setPhase('setup')
-                setCodePanelOpen(true)
-                setTab('guests')
-              }}
-            >
-              {coachStep ? t('demoExit') : t('demoStart')}
-            </button>
+            <div className="topbar-more">
+              <button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                aria-expanded={moreOpen}
+                onClick={() => setMoreOpen((v) => !v)}
+              >
+                {t('moreActionsMenu')}
+              </button>
+              {moreOpen && (
+                <div className="topbar-more-menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      setMoreOpen(false)
+                      if (coachStep) {
+                        markAssistedComplete()
+                        setCoachStep(null)
+                        setSearchParams({}, { replace: true })
+                        return
+                      }
+                      resetAssistedMode()
+                      setCoachStep('code')
+                      setPhase('setup')
+                      setCodePanelOpen(true)
+                      setTab('guests')
+                    }}
+                  >
+                    {coachStep ? t('demoExit') : t('demoStart')}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="btn btn-danger btn-sm"
+                    onClick={() => {
+                      setMoreOpen(false)
+                      void (async () => {
+                        if (!confirm(t('deleteConfirm'))) return
+                        await deleteGathering(gathering.id)
+                        navigate('/', { viewTransition: true })
+                      })()
+                    }}
+                  >
+                    {t('delete')}
+                  </button>
+                </div>
+              )}
+            </div>
           )}
-          <button
-            className="btn btn-danger btn-sm"
-            type="button"
-            onClick={() => {
-              void (async () => {
-                if (!confirm(t('deleteConfirm'))) return
-                await deleteGathering(gathering.id)
-                navigate('/', { viewTransition: true })
-              })()
-            }}
-          >
-            {t('delete')}
-          </button>
         </div>
       </header>
 
@@ -963,108 +990,54 @@ export function EventPage() {
         <div className="organizer-setup">
           {activePhase === 'setup' && !guided && (
             <>
-              <nav className="setup-flow-map" aria-label={t('setupFlowMapLabel')}>
-                {(
-                  [
-                    {
-                      id: 'setup-step-1',
-                      n: 1,
-                      label: t('setupStep1Short'),
-                      hint: t('setupStep1Hint'),
-                      done: step1Done,
-                    },
-                    {
-                      id: 'setup-step-2',
-                      n: 2,
-                      label: t('setupStep2Short'),
-                      hint: t('setupStep2Hint'),
-                      done: step2Done,
-                      optional: true,
-                    },
-                    {
-                      id: 'setup-step-3',
-                      n: 3,
-                      label: t('setupStep3Short'),
-                      hint: t('setupStep3Hint'),
-                      done: step3Done,
-                    },
-                    {
-                      id: 'setup-pay',
-                      n: 4,
-                      label: t('tabPayments'),
-                      hint: t('setupPayInfoHint'),
-                      done: payInfoDone,
-                      optional: true,
-                      action: () => {
-                        setPhase('run')
-                        setTab('payments')
-                      },
-                    },
-                  ] as const
-                ).map((step, i, arr) => (
-                  <div key={step.id} className="setup-flow-map-item">
-                    <button
-                      type="button"
-                      className={`setup-flow-map-step ${step.done ? 'done' : ''}`}
-                      onClick={() => {
-                        if ('action' in step && step.action) {
-                          step.action()
-                          return
-                        }
-                        document
-                          .getElementById(step.id)
-                          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                      }}
-                    >
-                      <span className="setup-flow-map-num" aria-hidden>
-                        {step.n}
-                      </span>
-                      <span className="setup-flow-map-copy">
-                        <span className="setup-flow-map-label">
-                          {step.label}
-                          {'optional' in step && step.optional ? (
-                            <em>{t('setupStepOptional')}</em>
-                          ) : null}
-                        </span>
-                        <span className="setup-flow-map-hint">{step.hint}</span>
-                      </span>
-                    </button>
-                    {i < arr.length - 1 && (
-                      <span className="setup-flow-map-arrow" aria-hidden>
-                        →
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </nav>
               <div className="organizer-setup-intro">
                 <h2>{t('setupFlowTitle')}</h2>
                 <p className="sub">{t('setupFlowSub')}</p>
+                {setupReadyToInvite ? (
+                  <p className="sub">{t('inviteWhenMenuReady')}</p>
+                ) : (
+                  <p className="sub">{t('setupPayLaterHint')}</p>
+                )}
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    setPhase('run')
+                    setTab('payments')
+                  }}
+                >
+                  {t('goToPayments')}
+                </button>
+              </div>
+              <div className="setup-accordion-status" aria-label={t('setupFlowMapLabel')}>
+                <span className={step1Done ? 'done' : ''}>{t('setupStep1Short')}</span>
+                <span className={step2Done ? 'done' : ''}>{t('setupStep2Short')}</span>
+                <span className={step3Done ? 'done' : ''}>{t('setupStep3Short')}</span>
               </div>
             </>
           )}
           {activePhase === 'invite' && !guided && (
             <div className="organizer-setup-intro">
-              <h2>{t('inviteIntentTitle')}</h2>
+              <h2>{t('inviteWhatFriendsSee')}</h2>
               <p className="sub">{t('inviteIntentSub')}</p>
             </div>
           )}
 
           {showSetupDetails && (
-            <section id="setup-step-1" className="panel setup-step">
+            <section
+              id="setup-step-1"
+              className={`panel setup-step ${step1Done && !editingDetails ? 'setup-step-collapsed' : ''}`}
+            >
               <div className="setup-step-head">
-                <span className={`setup-step-num ${step1Done ? 'done' : ''}`} aria-hidden>
-                  1
-                </span>
                 <div className="setup-step-copy">
                   <h2>{t('setupStep1')}</h2>
                   <p className="sub">{t('setupStep1Sub')}</p>
                 </div>
-                {step1Done && <span className="chip">{t('setupStepDone')}</span>}
+                {step1Done && !editingDetails && <span className="chip">{t('setupStepDone')}</span>}
                 {!editingDetails ? (
                   <button
                     type="button"
-                    className="btn btn-accent btn-sm"
+                    className="btn btn-ghost btn-sm"
                     onClick={() => {
                       setEditingDetails(true)
                       setDetailsMsg(null)
@@ -1564,19 +1537,12 @@ export function EventPage() {
           {showSetupShare && (
             <section
               id="setup-step-4"
-              className={`panel setup-step ${coachStep === 'share' || coachStep === 'done' ? 'coach-target' : ''}`}
+              className={`panel setup-step invite-phase-panel ${coachStep === 'share' || coachStep === 'done' ? 'coach-target' : ''}`}
               ref={shareBoxRef}
             >
               {(coachStep === 'share' || coachStep === 'done') && (
                 <p className="demo-inline-tip">{t('demoTipShare')}</p>
               )}
-              <div className="setup-step-head">
-                <div className="setup-step-copy">
-                  <h2>{t('inviteIntentTitle')}</h2>
-                  <p className="sub">{t('inviteIntentSub')}</p>
-                </div>
-                {step4Done && <span className="chip">{t('setupStepDone')}</span>}
-              </div>
               {!rsvpOpen && (
                 <div className="feedback-banner" role="status">
                   {t('rsvpClosedBanner')}
@@ -1587,12 +1553,48 @@ export function EventPage() {
                   {shareMsg}
                 </div>
               )}
-              <div className="setup-share">
-                <div className="setup-share-label">
-                  <strong>{t('selfServiceLink')}</strong>
-                  <p className="setup-share-hint">{t('selfServiceLinkHint')}</p>
-                  <code>{rsvpUrl}</code>
-                </div>
+              <InviteCard gathering={gathering} className="invite-card-enter" />
+              <div className="invite-share-primary">
+                <button
+                  className="btn btn-accent"
+                  type="button"
+                  onClick={shareInviteWhatsApp}
+                >
+                  {t('shareWhatsApp')}
+                </button>
+              </div>
+              <div className="setup-share-actions invite-share-secondary">
+                <button
+                  className="btn btn-sm btn-ghost"
+                  type="button"
+                  onClick={() => void copyLink()}
+                >
+                  {copied ? t('copied') : t('copyInviteLink')}
+                </button>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  type="button"
+                  onClick={() => void shareInviteNative()}
+                >
+                  {t('shareNative')}
+                </button>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  type="button"
+                  onClick={downloadCalendar}
+                  disabled={!gathering.date}
+                >
+                  {t('addToCalendar')}
+                </button>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  type="button"
+                  onClick={() => setShowWalkUpQr((v) => !v)}
+                >
+                  {showWalkUpQr ? t('hideWalkUpQr') : t('showWalkUpQr')}
+                </button>
+              </div>
+              {showWalkUpQr && (
                 <div className="setup-share-qr">
                   <img
                     src={rsvpQrImageUrl(rsvpUrl, 200)}
@@ -1603,45 +1605,10 @@ export function EventPage() {
                   />
                   <p className="sub">{t('walkUpQrHint')}</p>
                 </div>
-                <div className="setup-share-actions">
-                  <button
-                    className="btn btn-sm btn-accent"
-                    type="button"
-                    onClick={() => void copyLink()}
-                  >
-                    {copied ? t('copied') : t('copyInviteLink')}
-                  </button>
-                  <button
-                    className="btn btn-sm btn-accent"
-                    type="button"
-                    onClick={shareInviteWhatsApp}
-                  >
-                    {t('shareWhatsApp')}
-                  </button>
-                  <button
-                    className="btn btn-sm btn-ghost"
-                    type="button"
-                    onClick={() => void shareInviteNative()}
-                  >
-                    {t('shareNative')}
-                  </button>
-                  <Link
-                    viewTransition
-                    className="btn btn-sm btn-ghost"
-                    to={`/rsvp/${gathering.id}`}
-                  >
-                    {t('previewRsvp')}
-                  </Link>
-                  <button
-                    className="btn btn-sm btn-ghost"
-                    type="button"
-                    onClick={downloadCalendar}
-                    disabled={!gathering.date}
-                  >
-                    {t('addToCalendar')}
-                  </button>
-                </div>
-              </div>
+              )}
+              <p className="sub invite-link-mono">
+                <code>{rsvpUrl}</code>
+              </p>
             </section>
           )}
         </div>
@@ -1769,12 +1736,15 @@ export function EventPage() {
             onClick={() => setTab(key)}
           >
             {t(label)}
-            {key === 'inbox' &&
-              (gathering.messages || []).some((m) => !m.read) && (
-                <span className="tab-badge">
-                  {(gathering.messages || []).filter((m) => !m.read).length}
-                </span>
-              )}
+            {key === 'guests' && gathering.attendees.length > 0 && (
+              <span className="tab-badge">{gathering.attendees.length}</span>
+            )}
+            {key === 'payments' && unpaidCount > 0 && (
+              <span className="tab-badge">{unpaidCount}</span>
+            )}
+            {key === 'inbox' && unreadInbox > 0 && (
+              <span className="tab-badge">{unreadInbox}</span>
+            )}
           </button>
         ))}
       </div>
@@ -1799,7 +1769,16 @@ export function EventPage() {
               </button>
             </div>
             {gathering.attendees.length === 0 ? (
-              <div className="empty">{t('noRsvpsYet')}</div>
+              <div className="empty empty-with-cta">
+                <p>{t('noRsvpsYet')}</p>
+                <button
+                  type="button"
+                  className="btn btn-accent btn-sm"
+                  onClick={() => setPhase('invite')}
+                >
+                  {t('noGuestsInviteCta')}
+                </button>
+              </div>
             ) : (
               <div className="guest-list">
                 {gathering.attendees.map((a) => (
@@ -2183,6 +2162,23 @@ export function EventPage() {
           </div>
         </section>
       )}
+
+      {setupReadyToInvite &&
+        activePhase === 'setup' &&
+        !shareDone &&
+        !guided &&
+        canManage && (
+          <div className="sticky-invite-cta" role="region" aria-label={t('nextInviteFriends')}>
+            <p>{t('inviteWhenMenuReady')}</p>
+            <button
+              type="button"
+              className="btn btn-accent"
+              onClick={() => setPhase('invite')}
+            >
+              {t('nextInviteFriends')}
+            </button>
+          </div>
+        )}
 
       {coachStep && canManage && (
         <FirstEventCoach
