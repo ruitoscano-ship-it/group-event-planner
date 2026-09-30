@@ -361,8 +361,7 @@ body[data-demo-open='1'] .rsvp-sticky {
   position: relative;
   display: grid;
   align-items: end;
-  min-height: 100svh;
-  min-height: 100dvh;
+  min-height: min(72svh, 560px);
   margin: 0;
   border-radius: 0;
   overflow: hidden;
@@ -707,7 +706,7 @@ body[data-page='home'] {
   }
 
   .landing {
-    min-height: 100svh;
+    min-height: min(62svh, 480px);
     align-items: end;
   }
 
@@ -3987,7 +3986,7 @@ body[data-menu-sheet-open='1'] {
 }
 
 .home-flow h2,
-.home-glimpse h2,
+.home-glimpse-copy h2,
 .home-about h2,
 .home-close h2 {
   margin: 0 0 0.35rem;
@@ -4735,6 +4734,7 @@ body[data-menu-sheet-open='1'] {
   font-size: clamp(1.55rem, 4vw, 2rem);
   line-height: 1.15;
   letter-spacing: -0.02em;
+  color: #f4fffc;
 }
 
 .invite-card-meta {
