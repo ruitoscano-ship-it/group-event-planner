@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CreateEventChat } from '../components/CreateEventChat'
 import { InviteCard } from '../components/InviteCard'
@@ -57,12 +57,19 @@ export function HomePage() {
   const [accessError, setAccessError] = useState<string | null>(null)
   const [claimBusyId, setClaimBusyId] = useState<string | null>(null)
   const [authBanner, setAuthBanner] = useState<string | null>(null)
+  const [heroReady, setHeroReady] = useState(false)
+  const heroRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
     document.body.dataset.page = 'home'
     return () => {
       delete document.body.dataset.page
     }
+  }, [])
+
+  useEffect(() => {
+    const img = heroRef.current
+    if (img?.complete && img.naturalWidth > 0) setHeroReady(true)
   }, [])
 
   useEffect(() => {
@@ -190,11 +197,15 @@ export function HomePage() {
       <section className="landing">
         <div className="landing-visual" role="img" aria-label={t('brandAria')}>
           <img
-            className="landing-visual-img"
+            ref={heroRef}
+            className={`landing-visual-img${heroReady ? ' is-ready' : ''}`}
             src="/landing-hero.jpg"
             alt=""
+            width={864}
+            height={1152}
             decoding="async"
             fetchPriority="high"
+            onLoad={() => setHeroReady(true)}
           />
         </div>
         <div className="landing-copy">

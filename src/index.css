@@ -386,8 +386,15 @@ body[data-demo-open='1'] .rsvp-sticky {
   height: 100%;
   object-fit: cover;
   object-position: center;
-  transform: scale(1.06);
-  animation: hero-drift 18s ease-in-out infinite alternate;
+  opacity: 0;
+  transform: scale(1.04);
+  transition: opacity 0.5s ease;
+  will-change: opacity, transform;
+}
+
+.landing-visual-img.is-ready {
+  opacity: 1;
+  animation: hero-drift 22s ease-in-out 0.5s infinite alternate;
 }
 
 .landing-visual::after {
@@ -590,6 +597,10 @@ body[data-page='home'] .app-shell {
   padding-left: 0;
   padding-right: 0;
   padding-top: 0;
+}
+
+body[data-page='home'] .page-panel {
+  animation: none;
 }
 
 body[data-page='home'] {
@@ -2405,10 +2416,10 @@ textarea {
 
 @keyframes hero-drift {
   from {
-    transform: scale(1.06) translate3d(0, 0, 0);
+    transform: scale(1.04) translate3d(0, 0, 0);
   }
   to {
-    transform: scale(1.12) translate3d(-1.5%, -1%, 0);
+    transform: scale(1.09) translate3d(-1.2%, -0.8%, 0);
   }
 }
 
@@ -2716,8 +2727,13 @@ textarea {
 
 @media (prefers-reduced-motion: reduce) {
   .landing-visual-img {
-    animation: none;
-    transform: scale(1.04);
+    animation: none !important;
+    transform: scale(1.02);
+    transition: opacity 0.25s ease;
+  }
+
+  .landing-visual-img.is-ready {
+    animation: none !important;
   }
 }
 
