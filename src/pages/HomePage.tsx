@@ -178,7 +178,7 @@ export function HomePage() {
                   setAccessError(null)
                 }}
               >
-                {t('enterOrganizerCode')}
+                {t('findMyEvent')}
               </button>
             </div>
           )}
@@ -190,7 +190,7 @@ export function HomePage() {
           {mode === 'code' && (
             <section className="landing-panel">
               <div className="landing-panel-head">
-                <h2>{t('enterOrganizerCode')}</h2>
+                <h2>{t('findMyEvent')}</h2>
                 <button
                   type="button"
                   className="btn btn-ghost btn-sm"
@@ -200,7 +200,7 @@ export function HomePage() {
                 </button>
               </div>
               <p className="sub">
-                {user ? t('accessWithCodeSignedInSub') : t('accessWithCodeSub')}
+                {user ? t('findMyEventSignedInSub') : t('findMyEventSub')}
               </p>
               {accessError && <p className="allergy">{accessError}</p>}
               <form onSubmit={(e) => void onAccess(e)}>

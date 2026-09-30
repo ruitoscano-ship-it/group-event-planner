@@ -3,15 +3,11 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AgeGroupPicker } from '../components/AgeGroupPicker'
 import { EventCarteEditor } from '../components/EventCarteEditor'
 import { FirstEventCoach, type CoachStep } from '../components/FirstEventCoach'
-import { GroupSizeStepper } from '../components/GroupSizeStepper'
 import { GuestEditor } from '../components/GuestEditor'
 import { ImageUploadDropzone } from '../components/ImageUploadDropzone'
 import { KitchenBoard } from '../components/KitchenBoard'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
-import { MenuOrderField } from '../components/MenuOrderField'
 import { MenuPicker } from '../components/MenuPicker'
-import { MenuSheet } from '../components/MenuSheet'
-import { PartyKindPicker, type PartyKind } from '../components/PartyKindPicker'
 import { PaymentBoard } from '../components/PaymentBoard'
 import { PaymentInstructionsView } from '../components/PaymentInstructionsView'
 import { useI18n } from '../i18n/I18nContext'
@@ -25,14 +21,10 @@ import {
 } from '../lib/inviteShare'
 import {
   compressImageFile,
-  createMemberDraft,
   formatDate,
   formatMoney,
   gatheringTotals,
-  idsHaveAlaCarte,
-  resizeMembers,
   toggleMenuSelection,
-  unitPriceForIds,
 } from '../lib/money'
 import {
   formatOrganizerCode,
@@ -59,11 +51,31 @@ import {
 } from '../lib/assistedMode'
 import { useGatherings } from '../store/GatheringsContext'
 import { useOrganizerAuth } from '../store/OrganizerAuthContext'
-import type { AgeGroup, GroupMember } from '../types'
+import type { AgeGroup } from '../types'
 
 type Tab = 'guests' | 'payments' | 'kitchen' | 'inbox'
+type Phase = 'setup' | 'invite' | 'run' | 'wrap'
 
 const SHARE_DONE_KEY = 'round-share-done-v1'
+
+function pickDefaultPhase(
+  gathering: {
+    date: string
+    location: string
+    menu: unknown[]
+    attendees: unknown[]
+  },
+  justCreated: boolean,
+  shareDone: boolean,
+): Phase {
+  if (justCreated) return 'setup'
+  const setupIncomplete =
+    !gathering.date || !gathering.location.trim() || gathering.menu.length === 0
+  if (setupIncomplete) return 'setup'
+  if (gathering.attendees.length > 0) return 'run'
+  if (!shareDone) return 'invite'
+  return 'run'
+}
 
 function loadShareDone(eventId: string): boolean {
   try {
@@ -115,6 +127,8 @@ export function EventPage() {
   const [fetching, setFetching] = useState(!gathering)
   const [notFound, setNotFound] = useState(false)
   const [tab, setTab] = useState<Tab>('guests')
+  const [phase, setPhase] = useState<Phase | null>(null)
+  const [codePanelOpen, setCodePanelOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -129,9 +143,8 @@ export function EventPage() {
   const justCreated = searchParams.get('created') === '1'
   const [coachStep, setCoachStep] = useState<CoachStep | null>(null)
   const [showGuestForm, setShowGuestForm] = useState(false)
-  const [guestPartyKind, setGuestPartyKind] = useState<PartyKind | null>(null)
   const shareBoxRef = useRef<HTMLElement | null>(null)
-  const codePanelRef = useRef<HTMLElement | null>(null)
+  const codePanelRef = useRef<HTMLDetailsElement | null>(null)
   const menuFocusRef = useRef<HTMLDivElement | null>(null)
   const { ownsGathering, user: authUser, refreshAuth } = useOrganizerAuth()
   const canManage = hasOrganizerAccess(eventId) || ownsGathering(eventId)
@@ -186,10 +199,6 @@ export function EventPage() {
     menuRequest: '',
     ageGroup: 'adult' as AgeGroup,
   })
-  const [guestMembers, setGuestMembers] = useState<GroupMember[]>(() => [
-    createMemberDraft(),
-    createMemberDraft(),
-  ])
   const [guestBusy, setGuestBusy] = useState(false)
   const [guestMsg, setGuestMsg] = useState<string | null>(null)
   const [guestError, setGuestError] = useState(false)
@@ -285,6 +294,15 @@ export function EventPage() {
       rsvpClosed: Boolean(gathering.rsvpClosed),
     })
     setShareDone(loadShareDone(gathering.id))
+    setPhase((prev) =>
+      prev ??
+      pickDefaultPhase(
+        gathering,
+        searchParams.get('created') === '1',
+        loadShareDone(gathering.id),
+      ),
+    )
+    if (searchParams.get('created') === '1') setCodePanelOpen(true)
   }, [
     gathering?.id,
     gathering?.title,
@@ -302,31 +320,15 @@ export function EventPage() {
     gathering?.paymentQrUrl,
     gathering?.rsvpDeadline,
     gathering?.rsvpClosed,
+    gathering?.menu,
+    gathering?.attendees,
+    searchParams,
   ])
 
   const totals = useMemo(
     () => (gathering ? gatheringTotals(gathering) : null),
     [gathering],
   )
-
-  const guestEstimate = useMemo(() => {
-    if (!gathering) return 0
-    if (guestForm.asGroup) {
-      return guestMembers.reduce(
-        (sum, m) => sum + unitPriceForIds(m.menuItemIds, gathering.menu),
-        0,
-      )
-    }
-    return unitPriceForIds(guestForm.menuItemIds, gathering.menu)
-  }, [gathering, guestForm, guestMembers])
-
-  const guestHasAlaCarte = useMemo(() => {
-    if (!gathering) return false
-    if (guestForm.asGroup) {
-      return guestMembers.some((m) => idsHaveAlaCarte(m.menuItemIds, gathering.menu))
-    }
-    return idsHaveAlaCarte(guestForm.menuItemIds, gathering.menu)
-  }, [gathering, guestForm, guestMembers])
 
   if (fetching || (loading && !gathering)) {
     return <div className="empty">{t('loadingGathering')}</div>
@@ -616,13 +618,7 @@ export function EventPage() {
         organizerName: detailsForm.organizerName.trim(),
         organizerEmail: detailsForm.organizerEmail.trim(),
         organizerPhone: detailsForm.organizerPhone.trim(),
-        paymentIban: detailsForm.paymentIban.trim(),
-        paymentMbWay: detailsForm.paymentMbWay.trim(),
-        paymentBizum: detailsForm.paymentBizum.trim(),
-        paymentNote: detailsForm.paymentNote.trim(),
-        paymentQrUrl: detailsForm.paymentQrUrl.trim(),
         rsvpDeadline: detailsForm.rsvpDeadline.trim(),
-        rsvpClosed: detailsForm.rsvpClosed,
       })
       setDetailsMsg(pickFeedback(t, [...detailsSavedKeys]))
       setEditingDetails(false)
@@ -769,57 +765,11 @@ export function EventPage() {
     }
   }
 
-  function updateGuestMember(id: string, patch: Partial<GroupMember>) {
-    setGuestMembers((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)))
-  }
-
-  function toggleGuestMemberMenu(memberId: string, itemId: string) {
-    if (!gathering) return
-    setGuestMembers((prev) =>
-      prev.map((m) =>
-        m.id === memberId
-          ? {
-              ...m,
-              menuItemIds: toggleMenuSelection(m.menuItemIds, itemId, gathering.menu),
-            }
-          : m,
-      ),
-    )
-  }
-
   async function onAddGuest(e: FormEvent) {
     e.preventDefault()
-    if (!gathering || guestBusy || !guestPartyKind) return
-    const asGroup = guestPartyKind === 'group'
-    const displayName = asGroup
-      ? guestForm.name.trim() ||
-        guestMembers.find((m) => m.name.trim())?.name.trim() ||
-        ''
-      : guestForm.name.trim()
+    if (!gathering || guestBusy) return
+    const displayName = guestForm.name.trim()
     if (!displayName) return
-
-    if (asGroup) {
-      if (guestMembers.length < 2 || guestMembers.some((m) => !m.name.trim())) {
-        setGuestMsg(t('rsvpNeedGroupPeople'))
-        setGuestError(true)
-        return
-      }
-      const hasFixed = gathering.menu.length > 0
-      const hasCarte = gathering.carteApproved && (gathering.carteItems || []).length > 0
-      if (hasFixed || hasCarte || gathering.menuCardUrl) {
-        const incomplete = guestMembers.some(
-          (m) =>
-            m.menuItemIds.length === 0 &&
-            !(m.carteItemIds || []).length &&
-            !m.menuRequest.trim(),
-        )
-        if (incomplete) {
-          setGuestMsg(t('needMemberMenus'))
-          setGuestError(true)
-          return
-        }
-      }
-    }
 
     setGuestBusy(true)
     setGuestMsg(null)
@@ -830,24 +780,15 @@ export function EventPage() {
         registeredBy: t('registeredByOrganizer'),
         email: guestForm.email.trim(),
         phone: guestForm.phone.trim(),
-        menuItemIds: asGroup ? [] : guestForm.menuItemIds,
-        carteItemIds: asGroup ? [] : guestForm.carteItemIds,
-        allergies: asGroup ? '' : guestForm.allergies.trim(),
+        menuItemIds: guestForm.menuItemIds,
+        carteItemIds: guestForm.carteItemIds,
+        allergies: guestForm.allergies.trim(),
         notes: guestForm.notes.trim(),
-        menuRequest: asGroup ? '' : guestForm.menuRequest.trim(),
-        ageGroup: asGroup ? 'adult' : guestForm.ageGroup,
-        isGroup: asGroup,
-        groupSize: asGroup ? guestMembers.length : 1,
-        members: asGroup
-          ? guestMembers.map((m) => ({
-              ...m,
-              name: m.name.trim(),
-              allergies: m.allergies.trim(),
-              menuRequest: m.menuRequest.trim(),
-              carteItemIds: m.carteItemIds || [],
-              ageGroup: m.ageGroup === 'child' ? 'child' : 'adult',
-            }))
-          : [],
+        menuRequest: guestForm.menuRequest.trim(),
+        ageGroup: guestForm.ageGroup,
+        isGroup: false,
+        groupSize: 1,
+        members: [],
       })
       setGuestForm({
         name: '',
@@ -861,8 +802,6 @@ export function EventPage() {
         menuRequest: '',
         ageGroup: 'adult',
       })
-      setGuestMembers(resizeMembers([], 2))
-      setGuestPartyKind(null)
       setShowGuestForm(false)
       setGuestMsg(pickFeedback(t, [...guestAddedKeys]))
     } catch (err) {
@@ -874,12 +813,22 @@ export function EventPage() {
   }
 
   const guided = Boolean(coachStep && coachStep !== 'done')
-  const showMetrics = !guided
-  const showCodePanel = !guided || coachStep === 'code'
-  const showSetupDetails = !guided
-  const showSetupMenu = !guided || coachStep === 'menu'
-  const showSetupShare = !guided || coachStep === 'share' || coachStep === 'done'
-  const showTabs = !guided
+  const activePhase: Phase =
+    coachStep === 'share' || coachStep === 'done'
+      ? 'invite'
+      : coachStep === 'menu' || coachStep === 'code'
+        ? 'setup'
+        : phase || 'setup'
+  const showMetrics = !guided && (activePhase === 'run' || activePhase === 'wrap')
+  const showCodePanel =
+    (!guided && (codePanelOpen || justCreated || activePhase === 'setup')) ||
+    coachStep === 'code'
+  const showSetupDetails = activePhase === 'setup' && !guided
+  const showSetupMenu = activePhase === 'setup' && (!guided || coachStep === 'menu')
+  const showSetupShare =
+    activePhase === 'invite' && (!guided || coachStep === 'share' || coachStep === 'done')
+  const showTabs = activePhase === 'run' && !guided
+  const showWrap = activePhase === 'wrap' && !guided
   const tabOptions = [
     ['guests', 'tabGuests'],
     ['payments', 'tabPayments'],
@@ -892,6 +841,7 @@ export function EventPage() {
   )
   const step3Done = gathering.menu.length > 0
   const step4Done = shareDone
+  const payInfoDone = hasPaymentInstructions(gathering)
   const rsvpOpen = isRsvpOpen(gathering)
 
   return (
@@ -916,6 +866,8 @@ export function EventPage() {
                 }
                 resetAssistedMode()
                 setCoachStep('code')
+                setPhase('setup')
+                setCodePanelOpen(true)
                 setTab('guests')
               }}
             >
@@ -985,9 +937,31 @@ export function EventPage() {
         )}
       </section>
 
+      {!guided && canManage && (
+        <nav className="phase-nav" aria-label={t('phaseNavLabel')}>
+          {(
+            [
+              ['setup', 'phaseSetup'],
+              ['invite', 'phaseInvite'],
+              ['run', 'phaseRun'],
+              ['wrap', 'phaseWrap'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={`phase-nav-btn ${activePhase === key ? 'active' : ''}`}
+              onClick={() => setPhase(key)}
+            >
+              {t(label)}
+            </button>
+          ))}
+        </nav>
+      )}
+
       {(showSetupDetails || showSetupMenu || showSetupShare) && (
         <div className="organizer-setup">
-          {!guided && (
+          {activePhase === 'setup' && !guided && (
             <>
               <nav className="setup-flow-map" aria-label={t('setupFlowMapLabel')}>
                 {(
@@ -1015,11 +989,16 @@ export function EventPage() {
                       done: step3Done,
                     },
                     {
-                      id: 'setup-step-4',
+                      id: 'setup-pay',
                       n: 4,
-                      label: t('setupStep4Short'),
-                      hint: t('setupStep4Hint'),
-                      done: step4Done,
+                      label: t('tabPayments'),
+                      hint: t('setupPayInfoHint'),
+                      done: payInfoDone,
+                      optional: true,
+                      action: () => {
+                        setPhase('run')
+                        setTab('payments')
+                      },
                     },
                   ] as const
                 ).map((step, i, arr) => (
@@ -1028,6 +1007,10 @@ export function EventPage() {
                       type="button"
                       className={`setup-flow-map-step ${step.done ? 'done' : ''}`}
                       onClick={() => {
+                        if ('action' in step && step.action) {
+                          step.action()
+                          return
+                        }
                         document
                           .getElementById(step.id)
                           ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -1059,6 +1042,12 @@ export function EventPage() {
                 <p className="sub">{t('setupFlowSub')}</p>
               </div>
             </>
+          )}
+          {activePhase === 'invite' && !guided && (
+            <div className="organizer-setup-intro">
+              <h2>{t('inviteIntentTitle')}</h2>
+              <p className="sub">{t('inviteIntentSub')}</p>
+            </div>
           )}
 
           {showSetupDetails && (
@@ -1181,10 +1170,6 @@ export function EventPage() {
                         : '—'}
                     </dd>
                   </div>
-                  <div>
-                    <dt>{t('rsvpClosedToggle')}</dt>
-                    <dd>{gathering.rsvpClosed || !rsvpOpen ? t('yes') : t('no')}</dd>
-                  </div>
                 </dl>
               ) : (
                 <form onSubmit={(e) => void onSaveDetails(e)}>
@@ -1284,68 +1269,8 @@ export function EventPage() {
                         }
                       />
                     </label>
-                    <label className="full checkbox-row">
-                      <input
-                        type="checkbox"
-                        checked={detailsForm.rsvpClosed}
-                        onChange={(e) =>
-                          setDetailsForm({ ...detailsForm, rsvpClosed: e.target.checked })
-                        }
-                      />
-                      <span>
-                        {t('rsvpClosedToggle')}
-                        <span className="sub"> — {t('rsvpClosedHint')}</span>
-                      </span>
-                    </label>
                     <p className="sub full">{t('rsvpDeadlineHint')}</p>
-                    <label>
-                      {t('paymentIban')}
-                      <input
-                        value={detailsForm.paymentIban}
-                        onChange={(e) =>
-                          setDetailsForm({ ...detailsForm, paymentIban: e.target.value })
-                        }
-                        autoComplete="off"
-                      />
-                    </label>
-                    <label>
-                      {t('paymentMbWay')}
-                      <input
-                        value={detailsForm.paymentMbWay}
-                        onChange={(e) =>
-                          setDetailsForm({ ...detailsForm, paymentMbWay: e.target.value })
-                        }
-                      />
-                    </label>
-                    <label>
-                      {t('paymentBizum')}
-                      <input
-                        value={detailsForm.paymentBizum}
-                        onChange={(e) =>
-                          setDetailsForm({ ...detailsForm, paymentBizum: e.target.value })
-                        }
-                      />
-                    </label>
-                    <label className="full">
-                      {t('paymentNote')}
-                      <textarea
-                        value={detailsForm.paymentNote}
-                        onChange={(e) =>
-                          setDetailsForm({ ...detailsForm, paymentNote: e.target.value })
-                        }
-                        rows={2}
-                      />
-                    </label>
-                    <label className="full">
-                      {t('paymentQr')}
-                      <input
-                        value={detailsForm.paymentQrUrl}
-                        onChange={(e) =>
-                          setDetailsForm({ ...detailsForm, paymentQrUrl: e.target.value })
-                        }
-                        placeholder="https://…"
-                      />
-                    </label>
+                    <p className="sub full">{t('setupPayInfoHint')}</p>
                   </div>
                   <div className="form-actions">
                     <button className="btn btn-accent" type="submit" disabled={detailsBusy}>
@@ -1646,12 +1571,9 @@ export function EventPage() {
                 <p className="demo-inline-tip">{t('demoTipShare')}</p>
               )}
               <div className="setup-step-head">
-                <span className={`setup-step-num ${step4Done ? 'done' : ''}`} aria-hidden>
-                  4
-                </span>
                 <div className="setup-step-copy">
-                  <h2>{t('setupStep4')}</h2>
-                  <p className="sub">{t('setupStep4Sub')}</p>
+                  <h2>{t('inviteIntentTitle')}</h2>
+                  <p className="sub">{t('inviteIntentSub')}</p>
                 </div>
                 {step4Done && <span className="chip">{t('setupStepDone')}</span>}
               </div>
@@ -1718,20 +1640,6 @@ export function EventPage() {
                   >
                     {t('addToCalendar')}
                   </button>
-                  <button
-                    className="btn btn-sm btn-ghost"
-                    type="button"
-                    onClick={openFullReport}
-                  >
-                    {t('openEventReport')}
-                  </button>
-                  <button
-                    className="btn btn-sm btn-ghost"
-                    type="button"
-                    onClick={openOrderSheet}
-                  >
-                    {t('openOrderSheet')}
-                  </button>
                 </div>
               </div>
             </section>
@@ -1740,13 +1648,19 @@ export function EventPage() {
       )}
 
       {showCodePanel && organizerCode && (
-        <section
+        <details
           ref={codePanelRef}
           className={`panel organizer-code-panel ${justCreated ? 'is-new' : ''} ${
             coachStep === 'code' ? 'coach-target' : ''
           }`}
           style={{ marginBottom: '1rem' }}
+          open={justCreated || coachStep === 'code' || codePanelOpen}
+          onToggle={(e) => setCodePanelOpen((e.target as HTMLDetailsElement).open)}
         >
+          <summary className="code-panel-summary">
+            <strong>{t('howIManage')}</strong>
+            <span className="sub">{t('organizerCode')}</span>
+          </summary>
           {coachStep === 'code' && (
             <p className="demo-inline-tip">{t('demoTipCode')}</p>
           )}
@@ -1831,7 +1745,7 @@ export function EventPage() {
               )}
             </div>
           )}
-        </section>
+        </details>
       )}
       {reportMsg && (
         <p className="allergy" style={{ marginTop: '-0.5rem', marginBottom: '1rem' }}>
@@ -1876,7 +1790,10 @@ export function EventPage() {
               <button
                 type="button"
                 className="btn btn-accent btn-sm"
-                onClick={() => setShowGuestForm((v) => !v)}
+                onClick={() => {
+                  setShowGuestForm((v) => !v)
+                  setGuestForm((prev) => ({ ...prev, asGroup: false }))
+                }}
               >
                 {showGuestForm ? t('cancel') : t('organizerAddGuest')}
               </button>
@@ -1903,25 +1820,12 @@ export function EventPage() {
                 ))}
               </div>
             )}
-            <div className="form-actions" style={{ marginTop: '0.85rem' }}>
-              <button className="btn btn-ghost btn-sm" type="button" onClick={openFullReport}>
-                {t('openEventReport')}
-              </button>
-            </div>
           </section>
 
           {showGuestForm && (
             <section className="panel">
               <h2>{t('organizerRegister')}</h2>
-              <p className="sub">{t('organizerRegisterSub')}</p>
-              {(gathering.menuCardUrl ||
-                gathering.menu.length > 0 ||
-                (gathering.carteApproved && (gathering.carteItems || []).length > 0)) && (
-                <div className="menu-peek-bar">
-                  <p className="sub">{t('menuPeekHint')}</p>
-                  <MenuSheet gathering={gathering} />
-                </div>
-              )}
+              <p className="sub">{t('addGuestCompactSub')}</p>
               {guestMsg && (
                 <div
                   className={`feedback-banner ${guestError ? 'error' : ''}`}
@@ -1930,211 +1834,56 @@ export function EventPage() {
                   {guestMsg}
                 </div>
               )}
-              <form onSubmit={(e) => void onAddGuest(e)}>
-                <PartyKindPicker
-                  value={guestPartyKind}
-                  onChange={(next) => {
-                    setGuestPartyKind(next)
-                    setGuestForm((prev) => ({ ...prev, asGroup: next === 'group' }))
-                    if (next === 'group') {
-                      setGuestMembers((prev) =>
-                        prev.length >= 2 ? prev : resizeMembers(prev, 2),
-                      )
-                    }
-                  }}
-                />
-
-                {guestPartyKind === 'individual' && (
-                  <div className="form-grid rsvp-party-fields">
-                    <label className="full">
-                      {t('guestName')}
-                      <input
-                        required
-                        autoComplete="name"
-                        value={guestForm.name}
-                        onChange={(e) => setGuestForm({ ...guestForm, name: e.target.value })}
-                        placeholder="Alex"
-                      />
-                    </label>
-                    <div className="full">
-                      <AgeGroupPicker
-                        value={guestForm.ageGroup}
-                        onChange={(value) =>
-                          setGuestForm({ ...guestForm, ageGroup: value })
-                        }
-                      />
-                    </div>
-                    <label className="full">
-                      {t('allergiesDietary')}
-                      <input
-                        value={guestForm.allergies}
-                        onChange={(e) =>
-                          setGuestForm({ ...guestForm, allergies: e.target.value })
-                        }
-                        placeholder={t('placeholderAllergies')}
-                      />
-                    </label>
-                  </div>
-                )}
-
-                {guestPartyKind === 'group' && (
-                  <div className="rsvp-party-fields">
-                    <GroupSizeStepper
-                      value={guestMembers.length}
-                      onChange={(n) => setGuestMembers((prev) => resizeMembers(prev, n))}
+              <form
+                onSubmit={(e) => {
+                  setGuestForm((prev) => ({ ...prev, asGroup: false }))
+                  void onAddGuest(e)
+                }}
+              >
+                <div className="form-grid">
+                  <label className="full">
+                    {t('guestName')}
+                    <input
+                      required
+                      autoComplete="name"
+                      value={guestForm.name}
+                      onChange={(e) => setGuestForm({ ...guestForm, name: e.target.value })}
+                      placeholder="Alex"
                     />
-                    <div className="group-people">
-                      <h3>{t('groupPeopleTitle')}</h3>
-                      <p className="sub">{t('groupPeopleSub')}</p>
-                      <div className="group-people-list">
-                        {guestMembers.map((member, index) => (
-                          <div key={member.id} className="group-people-row">
-                            <span className="group-people-index" aria-hidden>
-                              {index + 1}
-                            </span>
-                            <label>
-                              <span className="sr-only">
-                                {t('memberLabel', { n: index + 1 })}
-                              </span>
-                              <input
-                                required
-                                value={member.name}
-                                onChange={(e) =>
-                                  updateGuestMember(member.id, { name: e.target.value })
-                                }
-                                placeholder={t('memberNamePlaceholder')}
-                                autoComplete="name"
-                              />
-                            </label>
-                            <AgeGroupPicker
-                              value={member.ageGroup || 'adult'}
-                              onChange={(value) =>
-                                updateGuestMember(member.id, { ageGroup: value })
-                              }
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <label className="full">
-                      {t('groupNameOptional')}
-                      <input
-                        value={guestForm.name}
-                        onChange={(e) => setGuestForm({ ...guestForm, name: e.target.value })}
-                        placeholder={t('groupNamePlaceholder')}
-                      />
-                      <span className="field-hint">{t('groupNameAutoHint')}</span>
-                    </label>
+                  </label>
+                  <label>
+                    {t('emailOptional')}
+                    <input
+                      type="email"
+                      value={guestForm.email}
+                      onChange={(e) => setGuestForm({ ...guestForm, email: e.target.value })}
+                      placeholder={t('placeholderEmail')}
+                    />
+                  </label>
+                  <div className="full">
+                    <AgeGroupPicker
+                      value={guestForm.ageGroup}
+                      onChange={(value) =>
+                        setGuestForm({ ...guestForm, ageGroup: value })
+                      }
+                    />
                   </div>
-                )}
-
-                {guestPartyKind && (
-                  <details className="rsvp-optional">
-                    <summary>{t('rsvpOptionalDetails')}</summary>
-                    <div className="form-grid">
-                      <label>
-                        {t('emailOptional')}
-                        <input
-                          type="email"
-                          autoComplete="email"
-                          inputMode="email"
-                          value={guestForm.email}
-                          onChange={(e) =>
-                            setGuestForm({ ...guestForm, email: e.target.value })
-                          }
-                          placeholder={t('placeholderEmail')}
-                        />
-                      </label>
-                      <label>
-                        {t('phoneOptional')}
-                        <input
-                          type="tel"
-                          autoComplete="tel"
-                          inputMode="tel"
-                          value={guestForm.phone}
-                          onChange={(e) =>
-                            setGuestForm({ ...guestForm, phone: e.target.value })
-                          }
-                          placeholder={t('placeholderPhone')}
-                        />
-                      </label>
-                      <label className="full">
-                        {t('notes')}
-                        <textarea
-                          value={guestForm.notes}
-                          onChange={(e) =>
-                            setGuestForm({ ...guestForm, notes: e.target.value })
-                          }
-                          placeholder={t('placeholderGuestNotes')}
-                        />
-                      </label>
-                    </div>
-                  </details>
-                )}
-
-                {guestPartyKind === 'group' ? (
-                  <>
-                    <h3 style={{ margin: '1.25rem 0 0.35rem', fontFamily: 'var(--font-display)' }}>
-                      {t('groupMembersTitle')}
-                    </h3>
-                    <p className="sub">{t('groupMembersSub')}</p>
-                    <div className="member-list">
-                      {guestMembers.map((member, index) => (
-                        <div key={member.id} className="member-card">
-                          <div className="member-card-head">
-                            <h4>
-                              {member.name.trim() || t('memberLabel', { n: index + 1 })}
-                            </h4>
-                          </div>
-                          <label>
-                            {t('allergiesDietary')}
-                            <input
-                              value={member.allergies}
-                              onChange={(e) =>
-                                updateGuestMember(member.id, { allergies: e.target.value })
-                              }
-                              placeholder={t('placeholderAllergies')}
-                            />
-                          </label>
-                          <div>
-                            <p className="sub" style={{ marginBottom: '0.5rem' }}>
-                              {t('memberMenu')}
-                            </p>
-                            <MenuPicker
-                              menu={gathering.menu}
-                              selectedIds={member.menuItemIds}
-                              currency={gathering.currency}
-                              onToggle={(itemId) => toggleGuestMemberMenu(member.id, itemId)}
-                              emptyLabel={t('organizerNoMenu')}
-                            />
-                          </div>
-                          {(gathering.menuCardUrl ||
-                            gathering.carteApproved ||
-                            gathering.menu.length === 0) && (
-                            <MenuOrderField
-                              carteItems={gathering.carteItems || []}
-                              carteApproved={Boolean(gathering.carteApproved)}
-                              selectedCarteIds={member.carteItemIds || []}
-                              onCarteChange={(ids) =>
-                                updateGuestMember(member.id, { carteItemIds: ids })
-                              }
-                              menuRequest={member.menuRequest}
-                              onMenuRequestChange={(value) =>
-                                updateGuestMember(member.id, { menuRequest: value })
-                              }
-                              placeholder={t('menuRequestPlaceholder')}
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : guestPartyKind === 'individual' ? (
-                  <>
-                    <h3 style={{ margin: '1.25rem 0 0.35rem', fontFamily: 'var(--font-display)' }}>
+                  <label className="full">
+                    {t('allergiesDietary')}
+                    <input
+                      value={guestForm.allergies}
+                      onChange={(e) =>
+                        setGuestForm({ ...guestForm, allergies: e.target.value })
+                      }
+                      placeholder={t('placeholderAllergies')}
+                    />
+                  </label>
+                </div>
+                {gathering.menu.length > 0 && (
+                  <div style={{ marginTop: '0.85rem' }}>
+                    <p className="sub" style={{ marginBottom: '0.5rem' }}>
                       {t('pickFromMenu')}
-                    </h3>
-                    <p className="sub">{t('pickMenuOrAlaCarte')}</p>
+                    </p>
                     <MenuPicker
                       menu={gathering.menu}
                       selectedIds={guestForm.menuItemIds}
@@ -2151,58 +1900,20 @@ export function EventPage() {
                       }
                       emptyLabel={t('organizerNoMenu')}
                     />
-                    {(gathering.menuCardUrl ||
-                      gathering.carteApproved ||
-                      gathering.menu.length === 0) && (
-                      <div style={{ marginTop: '0.85rem' }}>
-                        <MenuOrderField
-                          carteItems={gathering.carteItems || []}
-                          carteApproved={Boolean(gathering.carteApproved)}
-                          selectedCarteIds={guestForm.carteItemIds}
-                          onCarteChange={(ids) =>
-                            setGuestForm({ ...guestForm, carteItemIds: ids })
-                          }
-                          menuRequest={guestForm.menuRequest}
-                          onMenuRequestChange={(value) =>
-                            setGuestForm({ ...guestForm, menuRequest: value })
-                          }
-                          placeholder={t('menuRequestPlaceholder')}
-                        />
-                      </div>
-                    )}
-                  </>
-                ) : null}
-
-                {guestPartyKind && (
-                  <div className="sticky-actions">
-                    <div className="form-actions" style={{ justifyContent: 'space-between' }}>
-                      <div className="estimate-block">
-                        <span className="estimate-label">
-                          {guestHasAlaCarte ? t('estimatedVariable') : t('estimated')}
-                        </span>
-                        <span className="estimate-value price">
-                          {formatMoney(guestEstimate, gathering.currency, localeTag)}
-                          {guestHasAlaCarte ? '+' : ''}
-                        </span>
-                        <span className="estimate-note">
-                          {guestHasAlaCarte
-                            ? t('estimatedNoteVariable')
-                            : t('estimatedNote')}
-                          {guestPartyKind === 'group'
-                            ? ` · ${guestMembers.length} ${
-                                guestMembers.length === 1
-                                  ? t('personLabel')
-                                  : t('peopleLabel')
-                              }`
-                            : ''}
-                        </span>
-                      </div>
-                      <button className="btn btn-accent" type="submit" disabled={guestBusy}>
-                        {guestBusy ? t('saving') : t('addGuest')}
-                      </button>
-                    </div>
                   </div>
                 )}
+                <div className="form-actions" style={{ marginTop: '1rem' }}>
+                  <button className="btn btn-accent" type="submit" disabled={guestBusy}>
+                    {guestBusy ? t('saving') : t('addGuest')}
+                  </button>
+                  <Link
+                    viewTransition
+                    className="btn btn-ghost"
+                    to={`/rsvp/${gathering.id}`}
+                  >
+                    {t('addGuestFullRsvp')}
+                  </Link>
+                </div>
               </form>
             </section>
           )}
@@ -2363,6 +2074,114 @@ export function EventPage() {
       )}
       </div>
         </>
+      )}
+
+      {showWrap && (
+        <section className="panel wrap-phase">
+          <h2>{t('wrapTitle')}</h2>
+          <p className="sub">{t('wrapSub')}</p>
+          {changePlanText && (
+            <div className="feedback-banner change-plan-banner" role="status">
+              <p>{t('changeOfPlanReady')}</p>
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-accent"
+                  onClick={() =>
+                    window.open(
+                      whatsappShareUrl(changePlanText),
+                      '_blank',
+                      'noopener,noreferrer',
+                    )
+                  }
+                >
+                  {t('changeOfPlanWhatsApp')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(changePlanText)
+                  }}
+                >
+                  {t('changeOfPlanCopy')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost"
+                  onClick={() => setChangePlanText(null)}
+                >
+                  {t('dismiss')}
+                </button>
+              </div>
+            </div>
+          )}
+          <form
+            className="form-grid"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void (async () => {
+                setDetailsBusy(true)
+                try {
+                  await updateGathering(gathering.id, {
+                    rsvpClosed: detailsForm.rsvpClosed,
+                    rsvpDeadline: detailsForm.rsvpDeadline.trim(),
+                  })
+                  setDetailsMsg(pickFeedback(t, [...detailsSavedKeys]))
+                } catch (err) {
+                  setDetailsError(true)
+                  setDetailsMsg(
+                    err instanceof Error ? err.message : t('detailsSaveFailed'),
+                  )
+                } finally {
+                  setDetailsBusy(false)
+                }
+              })()
+            }}
+          >
+            <label>
+              {t('rsvpDeadline')}
+              <input
+                type="date"
+                value={detailsForm.rsvpDeadline}
+                onChange={(e) =>
+                  setDetailsForm({ ...detailsForm, rsvpDeadline: e.target.value })
+                }
+              />
+            </label>
+            <label className="full checkbox-row">
+              <input
+                type="checkbox"
+                checked={detailsForm.rsvpClosed}
+                onChange={(e) =>
+                  setDetailsForm({ ...detailsForm, rsvpClosed: e.target.checked })
+                }
+              />
+              <span>
+                {t('rsvpClosedToggle')}
+                <span className="sub"> — {t('rsvpClosedHint')}</span>
+              </span>
+            </label>
+            <div className="form-actions full">
+              <button className="btn btn-accent btn-sm" type="submit" disabled={detailsBusy}>
+                {detailsBusy ? t('saving') : t('saveDetails')}
+              </button>
+            </div>
+          </form>
+          {!rsvpOpen && (
+            <div className="feedback-banner" role="status">
+              {t('rsvpClosedBanner')}
+            </div>
+          )}
+          <div className="form-actions" style={{ marginTop: '1rem' }}>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={openFullReport}>
+              {t('openEventReport')}
+            </button>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={openOrderSheet}>
+              {t('openOrderSheet')}
+            </button>
+          </div>
+        </section>
       )}
 
       {coachStep && canManage && (

@@ -171,6 +171,15 @@ export const api = {
       },
     )
   },
+  getMyAttendee(gatheringId: string, guestKey: string) {
+    return request<{ attendee: Attendee }>(
+      `/api/gatherings/${encodeURIComponent(gatheringId)}/attendees/me`,
+      {
+        method: 'GET',
+        guestKey,
+      },
+    )
+  },
   addAttendee(
     gatheringId: string,
     attendee: Omit<

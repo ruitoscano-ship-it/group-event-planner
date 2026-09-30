@@ -15,6 +15,7 @@ import { MenuSheet } from '../components/MenuSheet'
 import { PartyKindPicker, type PartyKind } from '../components/PartyKindPicker'
 import { PaymentInstructionsView } from '../components/PaymentInstructionsView'
 import { useI18n } from '../i18n/I18nContext'
+import { api } from '../lib/api'
 import {
   createMemberDraft,
   formatDate,
@@ -32,6 +33,7 @@ import {
   loadMyRsvp,
   saveMyRsvp,
 } from '../lib/organizerAccess'
+import { hasPaymentInstructions } from '../lib/paymentInfo'
 import { isRsvpOpen } from '../lib/rsvpStatus'
 import { safeMediaUrl } from '../lib/safeUrl'
 import {
@@ -42,7 +44,7 @@ import {
   saveRsvpDraft,
 } from '../lib/rsvpDraft'
 import { useGatherings } from '../store/GatheringsContext'
-import type { AgeGroup, GroupMember } from '../types'
+import type { AgeGroup, Attendee, GroupMember } from '../types'
 
 type Step = 'who' | 'menu' | 'review'
 
@@ -93,6 +95,9 @@ export function RsvpPage() {
   const [ageGroup, setAgeGroup] = useState<AgeGroup>(draft?.ageGroup ?? 'adult')
   const [submitted, setSubmitted] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
+  const [statusBanner, setStatusBanner] = useState<string | null>(null)
+  const [statusReady, setStatusReady] = useState(false)
+  const restoreAttempted = useRef(false)
   const [lastSummary, setLastSummary] = useState<string | null>(null)
   const [rsvpUpdated, setRsvpUpdated] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -127,6 +132,57 @@ export function RsvpPage() {
       cancelled = true
     }
   }, [eventId, gathering, ensureGathering])
+
+  function applyAttendeeToForm(attendee: Attendee) {
+    const isGroup = Boolean(attendee.isGroup && attendee.members?.length)
+    setPartyKind(isGroup ? 'group' : 'individual')
+    setName(attendee.name || '')
+    setRegisteredBy(attendee.registeredBy || '')
+    setForSomeoneElse(
+      Boolean(attendee.registeredBy && attendee.registeredBy !== attendee.name),
+    )
+    setEmail(attendee.email || '')
+    setPhone(attendee.phone || '')
+    setNotes(attendee.notes || '')
+    setAllergies(attendee.allergies || '')
+    setMenuRequest(attendee.menuRequest || '')
+    setAgeGroup(attendee.ageGroup === 'child' ? 'child' : 'adult')
+    setMenuItemIds(attendee.menuItemIds || [])
+    setCarteItemIds(attendee.carteItemIds || [])
+    if (isGroup) {
+      setMembers(
+        (attendee.members || []).map((m) => ({
+          ...createMemberDraft(),
+          ...m,
+          carteItemIds: Array.isArray(m.carteItemIds) ? m.carteItemIds : [],
+        })),
+      )
+    }
+    setPaymentClaimed(Boolean(attendee.paymentClaimedAt))
+    setLastSummary(attendee.name || null)
+  }
+
+  useEffect(() => {
+    if (!gathering || restoreAttempted.current) return
+    const mine = loadMyRsvp(gathering.id)
+    if (!mine?.guestKey) {
+      setStatusReady(true)
+      return
+    }
+    restoreAttempted.current = true
+    void api
+      .getMyAttendee(gathering.id, mine.guestKey)
+      .then(({ attendee }) => {
+        applyAttendeeToForm(attendee)
+        saveMyRsvp(gathering.id, attendee.id, attendee.email || mine.email, mine.guestKey)
+        setSuccessMessage(t('statusYourRsvp'))
+        setSubmitted(true)
+      })
+      .catch(() => {
+        // Stale local key — stay on wizard
+      })
+      .finally(() => setStatusReady(true))
+  }, [gathering, t])
 
   useEffect(() => {
     if (!eventId || submitted) return
@@ -272,7 +328,7 @@ export function RsvpPage() {
     setSubmitError(null)
   }
 
-  if (fetching) {
+  if (fetching || (gathering && !statusReady && loadMyRsvp(gathering.id)?.guestKey)) {
     return (
       <div className="rsvp-shell">
         <div className="empty rsvp-loading">{t('loadingRsvp')}</div>
@@ -500,56 +556,59 @@ export function RsvpPage() {
 
         <section className="panel rsvp-success-panel" role="status">
           <p className="rsvp-success-kicker">{t('rsvpDoneKicker')}</p>
-          <h1>{successMessage || t('feedbackRsvp1')}</h1>
+          <h1>{successMessage || t('statusYourRsvp')}</h1>
           {lastSummary && <p className="rsvp-success-summary">{lastSummary}</p>}
           <p className="sub">
             {rsvpUpdated ? t('rsvpDoneUpdatedSub') : t('rsvpDoneSub')}
           </p>
-          <PaymentInstructionsView gathering={gathering} />
+          {hasPaymentInstructions(gathering) && (
+            <>
+              <PaymentInstructionsView gathering={gathering} />
+              <div className="form-actions rsvp-success-actions">
+                <button
+                  type="button"
+                  className="btn btn-accent"
+                  disabled={claimBusy || paymentClaimed || !loadMyRsvp(gathering.id)?.guestKey}
+                  onClick={() => {
+                    const mine = loadMyRsvp(gathering.id)
+                    if (!mine?.attendeeId || !mine.guestKey) return
+                    setClaimBusy(true)
+                    void updateAttendee(
+                      gathering.id,
+                      mine.attendeeId,
+                      { paymentClaimed: true },
+                      { guestKey: mine.guestKey },
+                    )
+                      .then(() => setPaymentClaimed(true))
+                      .catch((err) => {
+                        setSubmitError(
+                          err instanceof Error ? err.message : t('contactFailed'),
+                        )
+                      })
+                      .finally(() => setClaimBusy(false))
+                  }}
+                >
+                  {paymentClaimed
+                    ? t('paymentClaimSentDone')
+                    : claimBusy
+                      ? t('saving')
+                      : t('paymentClaimSent')}
+                </button>
+              </div>
+            </>
+          )}
           <div className="form-actions rsvp-success-actions">
             <button
               type="button"
               className="btn btn-accent"
-              disabled={claimBusy || paymentClaimed || !loadMyRsvp(gathering.id)?.guestKey}
               onClick={() => {
-                const mine = loadMyRsvp(gathering.id)
-                if (!mine?.attendeeId || !mine.guestKey) return
-                setClaimBusy(true)
-                void updateAttendee(
-                  gathering.id,
-                  mine.attendeeId,
-                  { paymentClaimed: true },
-                  { guestKey: mine.guestKey },
-                )
-                  .then(() => setPaymentClaimed(true))
-                  .catch((err) => {
-                    setSubmitError(
-                      err instanceof Error ? err.message : t('contactFailed'),
-                    )
-                  })
-                  .finally(() => setClaimBusy(false))
-              }}
-            >
-              {paymentClaimed
-                ? t('paymentClaimSentDone')
-                : claimBusy
-                  ? t('saving')
-                  : t('paymentClaimSent')}
-            </button>
-            <button
-              type="button"
-              className="btn btn-accent"
-              onClick={() => {
-                const mine = loadMyRsvp(gathering.id)
                 setSubmitted(false)
-                setLastSummary(null)
                 setRsvpUpdated(false)
                 setStep('who')
-                if (mine?.email) setEmail(mine.email)
                 formTopRef.current?.scrollIntoView({ behavior: 'smooth' })
               }}
             >
-              {t('rsvpUpdateMine')}
+              {t('statusEditRsvp')}
             </button>
             <button
               type="button"
@@ -569,8 +628,11 @@ export function RsvpPage() {
                     clearRsvpDraft(gathering.id)
                     setSubmitted(false)
                     setLastSummary(null)
-                    setSuccessMessage(t('cancelMyRsvpDone'))
+                    setStatusBanner(t('cancelBanner'))
+                    setSuccessMessage('')
                     resetForm(true)
+                    restoreAttempted.current = true
+                    setStatusReady(true)
                   })
                   .catch((err) => {
                     setSubmitError(
@@ -679,7 +741,62 @@ export function RsvpPage() {
         <section className="panel">
           <h2>{gathering.title}</h2>
           <p className="sub">{t('rsvpClosedGuest')}</p>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn btn-accent"
+              onClick={() => setContactOpen(true)}
+            >
+              {t('rsvpClosedGuestContact')}
+            </button>
+          </div>
         </section>
+        {contactOpen && (
+          <section className="panel" style={{ marginTop: '1rem' }}>
+            <h2>{t('contactOrganizer')}</h2>
+            <p className="sub">{t('contactOrganizerSub')}</p>
+            {contactMsg && (
+              <div
+                className={`feedback-banner ${contactError ? 'error' : ''}`}
+                role="status"
+              >
+                {contactMsg}
+              </div>
+            )}
+            <form onSubmit={(e) => void onContact(e)}>
+              <div className="form-grid">
+                <label className="full">
+                  {t('yourName')}
+                  <input
+                    required
+                    value={contactForm.fromName}
+                    onChange={(e) =>
+                      setContactForm({ ...contactForm, fromName: e.target.value })
+                    }
+                    autoComplete="name"
+                  />
+                </label>
+                <label className="full">
+                  {t('contactMessage')}
+                  <textarea
+                    required
+                    value={contactForm.body}
+                    onChange={(e) =>
+                      setContactForm({ ...contactForm, body: e.target.value })
+                    }
+                    placeholder={t('contactMessagePlaceholder')}
+                    rows={3}
+                  />
+                </label>
+              </div>
+              <div className="form-actions">
+                <button className="btn btn-accent" type="submit" disabled={contactBusy}>
+                  {contactBusy ? t('saving') : t('sendMessage')}
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
       </div>
     )
   }
@@ -695,6 +812,19 @@ export function RsvpPage() {
           <LanguageSwitcher />
         </div>
       </header>
+
+      {statusBanner && (
+        <div className="feedback-banner" role="status" style={{ marginBottom: '1rem' }}>
+          {statusBanner}
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setStatusBanner(null)}
+          >
+            {t('dismiss')}
+          </button>
+        </div>
+      )}
 
       <div className="event-summary-card">
         <h2>{gathering.title}</h2>
@@ -1214,77 +1344,7 @@ export function RsvpPage() {
         )}
       </details>
 
-      <details
-        className="panel rsvp-secondary"
-        style={{ marginTop: '0.75rem' }}
-        open={contactOpen}
-        onToggle={(e) => setContactOpen((e.target as HTMLDetailsElement).open)}
-      >
-        <summary>{t('contactOrganizer')}</summary>
-        <p className="sub">{t('contactOrganizerSub')}</p>
-        {contactMsg && (
-          <div
-            className={`feedback-banner ${contactError ? 'error' : ''}`}
-            role="status"
-          >
-            {contactMsg}
-          </div>
-        )}
-        <form onSubmit={(e) => void onContact(e)}>
-          <div className="form-grid">
-            <label className="full">
-              {t('yourName')}
-              <input
-                required
-                value={contactForm.fromName}
-                onChange={(e) =>
-                  setContactForm({ ...contactForm, fromName: e.target.value })
-                }
-                autoComplete="name"
-              />
-            </label>
-            <label>
-              {t('emailOptional')}
-              <input
-                type="email"
-                value={contactForm.fromEmail}
-                onChange={(e) =>
-                  setContactForm({ ...contactForm, fromEmail: e.target.value })
-                }
-                autoComplete="email"
-              />
-            </label>
-            <label>
-              {t('phoneOptional')}
-              <input
-                type="tel"
-                value={contactForm.fromPhone}
-                onChange={(e) =>
-                  setContactForm({ ...contactForm, fromPhone: e.target.value })
-                }
-                autoComplete="tel"
-              />
-            </label>
-            <label className="full">
-              {t('contactMessage')}
-              <textarea
-                required
-                value={contactForm.body}
-                onChange={(e) =>
-                  setContactForm({ ...contactForm, body: e.target.value })
-                }
-                placeholder={t('contactMessagePlaceholder')}
-                rows={3}
-              />
-            </label>
-          </div>
-          <div className="form-actions">
-            <button className="btn btn-accent" type="submit" disabled={contactBusy}>
-              {contactBusy ? t('saving') : t('sendMessage')}
-            </button>
-          </div>
-        </form>
-      </details>
+
     </div>
   )
 }

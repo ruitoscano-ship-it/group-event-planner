@@ -1139,6 +1139,22 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
     return json(toClientGathering(gathering, true))
   }
 
+  const myAttendeeMatch = path.match(/^\/api\/gatherings\/([^/]+)\/attendees\/me$/)
+  if (myAttendeeMatch && method === 'GET') {
+    const limited = rateLimit(request, 'rsvp-me', 60, 60_000)
+    if (limited) return limited
+    const id = decodeURIComponent(myAttendeeMatch[1])
+    const gathering = await readGathering(env.DB, id)
+    if (!gathering) return error('Gathering not found', 404)
+    const guestKey = request.headers.get('X-Guest-Key') || ''
+    if (!guestKey) return error('Guest access required', 401)
+    const attendee = gathering.attendees.find(
+      (a) => a.guestKey && a.guestKey === guestKey,
+    )
+    if (!attendee) return error('Attendee not found', 404)
+    return json({ attendee })
+  }
+
   const attendeesMatch = path.match(/^\/api\/gatherings\/([^/]+)\/attendees$/)
   if (attendeesMatch && method === 'POST') {
     const limited = rateLimit(request, 'rsvp', 40, 60_000)
