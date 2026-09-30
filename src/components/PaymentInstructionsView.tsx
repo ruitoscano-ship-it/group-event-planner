@@ -70,7 +70,7 @@ export function PaymentInstructionsView({ gathering, compact = false }: Props) {
           <CopyRow label={t('paymentBizum')} value={gathering.paymentBizum.trim()} />
         )}
         {gathering.paymentNote.trim() && (
-          <div className="full">
+          <div className="full payment-copy-row payment-note-row">
             <dt>{t('paymentNote')}</dt>
             <dd>{gathering.paymentNote.trim()}</dd>
           </div>

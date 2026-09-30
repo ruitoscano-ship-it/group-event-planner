@@ -8,6 +8,7 @@ import {
 import { Link, useParams } from 'react-router-dom'
 import { AgeGroupPicker } from '../components/AgeGroupPicker'
 import { GroupSizeStepper } from '../components/GroupSizeStepper'
+import { GuestContactForm } from '../components/GuestContactForm'
 import { InviteCard } from '../components/InviteCard'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { MenuOrderField } from '../components/MenuOrderField'
@@ -18,7 +19,6 @@ import { PaymentInstructionsView } from '../components/PaymentInstructionsView'
 import { useI18n } from '../i18n/I18nContext'
 import { api } from '../lib/api'
 import { buildGatheringIcs, downloadIcs } from '../lib/calendarIcs'
-import { mapsSearchUrl } from '../lib/inviteShare'
 import {
   createMemberDraft,
   formatMoney,
@@ -387,7 +387,7 @@ export function RsvpPage() {
     const displayName = asGroup ? ensureGroupName() : name.trim()
     if (!displayName) return
     const registrar = forSomeoneElse
-      ? registeredBy.trim() || 'Someone'
+      ? registeredBy.trim() || t('someoneFallback')
       : displayName
 
     if (!whoReady) {
@@ -526,9 +526,6 @@ export function RsvpPage() {
       typeof window !== 'undefined'
         ? `${window.location.origin}/rsvp/${gathering.id}`
         : ''
-    const maps = gathering.location.trim()
-      ? mapsSearchUrl(gathering.location.trim())
-      : ''
 
     return (
       <div className="rsvp-shell rsvp-shell-status">
@@ -542,7 +539,7 @@ export function RsvpPage() {
           </div>
         </header>
 
-        <InviteCard gathering={gathering} showMapsLink className="invite-card-enter" />
+        <InviteCard gathering={gathering} showMapsLink />
 
         <section className="panel rsvp-success-panel" role="status">
           <p className="rsvp-success-kicker">{t('rsvpDoneKicker')}</p>
@@ -567,7 +564,7 @@ export function RsvpPage() {
             ))}
           </div>
           {(estimated > 0 || hasAlaCartePick) && (
-            <div className="rsvp-amount-due">
+            <div className="rsvp-amount-due due-row">
               <span>{t('amountDueLabel')}</span>
               <strong>
                 {formatMoney(estimated, gathering.currency, localeTag)}
@@ -576,44 +573,59 @@ export function RsvpPage() {
             </div>
           )}
           {hasPaymentInstructions(gathering) && (
-            <>
-              <PaymentInstructionsView gathering={gathering} />
-              <div className="form-actions rsvp-success-actions">
-                <button
-                  type="button"
-                  className="btn btn-accent"
-                  disabled={
-                    claimBusy || paymentClaimed || !loadMyRsvp(gathering.id)?.guestKey
-                  }
-                  onClick={() => {
-                    const mine = loadMyRsvp(gathering.id)
-                    if (!mine?.attendeeId || !mine.guestKey) return
-                    setClaimBusy(true)
-                    setSubmitError(null)
-                    void updateAttendee(
-                      gathering.id,
-                      mine.attendeeId,
-                      { paymentClaimed: true },
-                      { guestKey: mine.guestKey },
-                    )
-                      .then(() => setPaymentClaimed(true))
-                      .catch((err) => {
-                        setSubmitError(
-                          err instanceof Error ? err.message : t('contactFailed'),
-                        )
-                      })
-                      .finally(() => setClaimBusy(false))
-                  }}
-                >
-                  {paymentClaimed
-                    ? t('paymentClaimSentDone')
-                    : claimBusy
-                      ? t('saving')
-                      : t('paymentClaimSent')}
-                </button>
-              </div>
-            </>
+            <PaymentInstructionsView gathering={gathering} />
           )}
+          <div className="form-actions rsvp-success-actions rsvp-status-primary">
+            {hasPaymentInstructions(gathering) && !paymentClaimed ? (
+              <button
+                type="button"
+                className="btn btn-accent"
+                disabled={claimBusy || !loadMyRsvp(gathering.id)?.guestKey}
+                onClick={() => {
+                  const mine = loadMyRsvp(gathering.id)
+                  if (!mine?.attendeeId || !mine.guestKey) return
+                  setClaimBusy(true)
+                  setSubmitError(null)
+                  void updateAttendee(
+                    gathering.id,
+                    mine.attendeeId,
+                    { paymentClaimed: true },
+                    { guestKey: mine.guestKey },
+                  )
+                    .then(() => setPaymentClaimed(true))
+                    .catch((err) => {
+                      setSubmitError(
+                        err instanceof Error ? err.message : t('contactFailed'),
+                      )
+                    })
+                    .finally(() => setClaimBusy(false))
+                }}
+              >
+                {claimBusy ? t('saving') : t('paymentClaimSent')}
+              </button>
+            ) : null}
+            {hasPaymentInstructions(gathering) && paymentClaimed ? (
+              <p className="sub rsvp-claim-done">{t('paymentClaimSentDone')}</p>
+            ) : null}
+            <button
+              type="button"
+              className={
+                hasPaymentInstructions(gathering) && !paymentClaimed
+                  ? 'btn btn-ghost'
+                  : 'btn btn-accent'
+              }
+              onClick={() => {
+                setSubmitError(null)
+                setSubmitted(false)
+                setRsvpUpdated(false)
+                setRsvpStarted(true)
+                setStep('who')
+                formTopRef.current?.scrollIntoView({ behavior: 'smooth' })
+              }}
+            >
+              {t('statusEditRsvp')}
+            </button>
+          </div>
           <div className="form-actions rsvp-success-actions rsvp-utility-actions">
             {gathering.date && (
               <button
@@ -635,35 +647,9 @@ export function RsvpPage() {
                 {t('addToCalendarGuest')}
               </button>
             )}
-            {maps && (
-              <a
-                className="btn btn-ghost btn-sm"
-                href={maps}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {t('openInMaps')}
-              </a>
-            )}
-          </div>
-          <div className="form-actions rsvp-success-actions">
             <button
               type="button"
-              className={hasPaymentInstructions(gathering) ? 'btn btn-ghost' : 'btn btn-accent'}
-              onClick={() => {
-                setSubmitError(null)
-                setSubmitted(false)
-                setRsvpUpdated(false)
-                setRsvpStarted(true)
-                setStep('who')
-                formTopRef.current?.scrollIntoView({ behavior: 'smooth' })
-              }}
-            >
-              {t('statusEditRsvp')}
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
+              className="btn btn-ghost btn-sm"
               disabled={cancelBusy || !loadMyRsvp(gathering.id)?.guestKey}
               hidden={!loadMyRsvp(gathering.id)?.guestKey}
               onClick={() => {
@@ -697,7 +683,7 @@ export function RsvpPage() {
             </button>
             <button
               type="button"
-              className="btn btn-ghost"
+              className="btn btn-ghost btn-sm"
               onClick={() => setContactOpen(true)}
             >
               {t('contactOrganizer')}
@@ -706,50 +692,15 @@ export function RsvpPage() {
         </section>
 
         {contactOpen && (
-          <section className="panel" style={{ marginTop: '1rem' }}>
-            <h2>{t('contactOrganizer')}</h2>
-            <p className="sub">{t('contactOrganizerSub')}</p>
-            {contactMsg && (
-              <div
-                className={`feedback-banner ${contactError ? 'error' : ''}`}
-                role="status"
-              >
-                {contactMsg}
-              </div>
-            )}
-            <form onSubmit={(e) => void onContact(e)}>
-              <div className="form-grid">
-                <label className="full">
-                  {t('yourName')}
-                  <input
-                    required
-                    value={contactForm.fromName}
-                    onChange={(e) =>
-                      setContactForm({ ...contactForm, fromName: e.target.value })
-                    }
-                    autoComplete="name"
-                  />
-                </label>
-                <label className="full">
-                  {t('contactMessage')}
-                  <textarea
-                    required
-                    value={contactForm.body}
-                    onChange={(e) =>
-                      setContactForm({ ...contactForm, body: e.target.value })
-                    }
-                    placeholder={t('contactMessagePlaceholder')}
-                    rows={3}
-                  />
-                </label>
-              </div>
-              <div className="form-actions">
-                <button className="btn btn-accent" type="submit" disabled={contactBusy}>
-                  {contactBusy ? t('saving') : t('sendMessage')}
-                </button>
-              </div>
-            </form>
-          </section>
+          <GuestContactForm
+            values={contactForm}
+            onChange={setContactForm}
+            onSubmit={(e) => void onContact(e)}
+            onClose={() => setContactOpen(false)}
+            busy={contactBusy}
+            message={contactMsg}
+            error={contactError}
+          />
         )}
       </div>
     )
@@ -767,8 +718,10 @@ export function RsvpPage() {
             <LanguageSwitcher />
           </div>
         </header>
-        <InviteCard gathering={gathering} showMapsLink className="invite-card-enter" />
-        <section className="panel">
+        <InviteCard gathering={gathering} showMapsLink />
+        <section className="panel rsvp-closed-panel">
+          <p className="rsvp-success-kicker">{t('rsvpClosedKicker')}</p>
+          <h1>{t('rsvpClosedTitle')}</h1>
           <p className="sub">{t('rsvpClosedGuest')}</p>
           <div className="form-actions">
             <button
@@ -781,50 +734,15 @@ export function RsvpPage() {
           </div>
         </section>
         {contactOpen && (
-          <section className="panel" style={{ marginTop: '1rem' }}>
-            <h2>{t('contactOrganizer')}</h2>
-            <p className="sub">{t('contactOrganizerSub')}</p>
-            {contactMsg && (
-              <div
-                className={`feedback-banner ${contactError ? 'error' : ''}`}
-                role="status"
-              >
-                {contactMsg}
-              </div>
-            )}
-            <form onSubmit={(e) => void onContact(e)}>
-              <div className="form-grid">
-                <label className="full">
-                  {t('yourName')}
-                  <input
-                    required
-                    value={contactForm.fromName}
-                    onChange={(e) =>
-                      setContactForm({ ...contactForm, fromName: e.target.value })
-                    }
-                    autoComplete="name"
-                  />
-                </label>
-                <label className="full">
-                  {t('contactMessage')}
-                  <textarea
-                    required
-                    value={contactForm.body}
-                    onChange={(e) =>
-                      setContactForm({ ...contactForm, body: e.target.value })
-                    }
-                    placeholder={t('contactMessagePlaceholder')}
-                    rows={3}
-                  />
-                </label>
-              </div>
-              <div className="form-actions">
-                <button className="btn btn-accent" type="submit" disabled={contactBusy}>
-                  {contactBusy ? t('saving') : t('sendMessage')}
-                </button>
-              </div>
-            </form>
-          </section>
+          <GuestContactForm
+            values={contactForm}
+            onChange={setContactForm}
+            onSubmit={(e) => void onContact(e)}
+            onClose={() => setContactOpen(false)}
+            busy={contactBusy}
+            message={contactMsg}
+            error={contactError}
+          />
         )}
       </div>
     )
@@ -843,7 +761,7 @@ export function RsvpPage() {
       </header>
 
       {statusBanner && (
-        <div className="feedback-banner" role="status" style={{ marginBottom: '1rem' }}>
+        <div className="feedback-banner status-banner" role="status">
           {statusBanner}
           <button
             type="button"
@@ -858,7 +776,6 @@ export function RsvpPage() {
       <InviteCard
         gathering={gathering}
         showMapsLink
-        className="invite-card-enter"
         footer={
           comingCount > 0 ? t('alreadyComing', { count: comingCount }) : undefined
         }
@@ -866,28 +783,37 @@ export function RsvpPage() {
 
       {!rsvpStarted ? (
         <section className="panel rsvp-start-panel">
-          <button
-            type="button"
-            className="btn btn-accent"
-            onClick={() => {
-              setRsvpStarted(true)
-              formTopRef.current?.scrollIntoView({ behavior: 'smooth' })
-            }}
-          >
-            {t('rsvpStartGoing')}
-          </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => setContactOpen(true)}
-          >
-            {t('contactOrganizer')}
-          </button>
+          <p className="rsvp-success-kicker">{t('rsvpStartKicker')}</p>
+          <h1>{t('rsvpStartTitle')}</h1>
+          <p className="sub">{t('rsvpStartSub')}</p>
+          <div className="rsvp-start-actions">
+            <button
+              type="button"
+              className="btn btn-accent"
+              onClick={() => {
+                setRsvpStarted(true)
+                formTopRef.current?.scrollIntoView({ behavior: 'smooth' })
+              }}
+            >
+              {t('rsvpStartGoing')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setContactOpen(true)}
+            >
+              {t('contactOrganizer')}
+            </button>
+          </div>
         </section>
       ) : (
       <section className="panel rsvp-flow" ref={formTopRef}>
         <p className="rsvp-unique-hint">{t('rsvpUniqueHint')}</p>
-        <nav className="rsvp-steps" aria-label={t('rsvpStepsLabel')}>
+        <nav
+          className="rsvp-steps"
+          aria-label={t('rsvpStepsLabel')}
+          data-count={steps.length}
+        >
           {steps.map((key, index) => {
             const active = step === key
             const done = index < stepIndex
@@ -938,7 +864,7 @@ export function RsvpPage() {
                     enterKeyHint="next"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Alex"
+                    placeholder={t('placeholderGuestName')}
                   />
                 </label>
                 <div className="full">
@@ -1127,7 +1053,7 @@ export function RsvpPage() {
                     </label>
                     {gathering.menu.length > 0 && (
                       <div>
-                        <p className="sub" style={{ marginBottom: '0.5rem' }}>
+                        <p className="sub stack-mb-xs">
                           {t('memberMenu')}
                         </p>
                         <MenuPicker
@@ -1180,7 +1106,7 @@ export function RsvpPage() {
                 {(gathering.menuCardUrl ||
                   (gathering.carteApproved &&
                     (gathering.carteItems || []).length > 0)) && (
-                  <div style={{ marginTop: '0.85rem' }}>
+                  <div className="menu-pick-block">
                     <MenuOrderField
                       carteItems={gathering.carteItems || []}
                       carteApproved={Boolean(gathering.carteApproved)}
@@ -1264,7 +1190,7 @@ export function RsvpPage() {
                   <strong>{allergies}</strong>
                 </div>
               )}
-              <div className="rsvp-review-row highlight">
+              <div className="rsvp-review-row highlight due-row">
                 <span>
                   {hasMenuLoaded
                     ? hasAlaCartePick
@@ -1357,7 +1283,7 @@ export function RsvpPage() {
       )}
 
       {rsvpStarted && (
-      <details className="panel rsvp-secondary" style={{ marginTop: '1rem' }}>
+      <details className="panel rsvp-secondary panel-adjacent">
         <summary>
           {t('alreadyComing', { count: comingCount })}
         </summary>
@@ -1383,50 +1309,15 @@ export function RsvpPage() {
       )}
 
       {contactOpen && (
-        <section className="panel" style={{ marginTop: '1rem' }}>
-          <h2>{t('contactOrganizer')}</h2>
-          <p className="sub">{t('contactOrganizerSub')}</p>
-          {contactMsg && (
-            <div
-              className={`feedback-banner ${contactError ? 'error' : ''}`}
-              role="status"
-            >
-              {contactMsg}
-            </div>
-          )}
-          <form onSubmit={(e) => void onContact(e)}>
-            <div className="form-grid">
-              <label className="full">
-                {t('yourName')}
-                <input
-                  required
-                  value={contactForm.fromName}
-                  onChange={(e) =>
-                    setContactForm({ ...contactForm, fromName: e.target.value })
-                  }
-                  autoComplete="name"
-                />
-              </label>
-              <label className="full">
-                {t('contactMessage')}
-                <textarea
-                  required
-                  value={contactForm.body}
-                  onChange={(e) =>
-                    setContactForm({ ...contactForm, body: e.target.value })
-                  }
-                  placeholder={t('contactMessagePlaceholder')}
-                  rows={3}
-                />
-              </label>
-            </div>
-            <div className="form-actions">
-              <button className="btn btn-accent" type="submit" disabled={contactBusy}>
-                {contactBusy ? t('saving') : t('sendMessage')}
-              </button>
-            </div>
-          </form>
-        </section>
+        <GuestContactForm
+          values={contactForm}
+          onChange={setContactForm}
+          onSubmit={(e) => void onContact(e)}
+          onClose={() => setContactOpen(false)}
+          busy={contactBusy}
+          message={contactMsg}
+          error={contactError}
+        />
       )}
 
     </div>

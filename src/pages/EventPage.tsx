@@ -232,6 +232,27 @@ export function EventPage() {
   }, [gathering?.menuCardUrl])
 
   useEffect(() => {
+    const guidedNow = Boolean(coachStep && coachStep !== 'done')
+    const phaseNow =
+      coachStep === 'share' || coachStep === 'done'
+        ? 'invite'
+        : coachStep === 'menu' || coachStep === 'code'
+          ? 'setup'
+          : phase || 'setup'
+    const ready =
+      Boolean(gathering?.date && gathering.location && gathering.menu.length > 0) &&
+      phaseNow === 'setup' &&
+      !shareDone &&
+      !guidedNow &&
+      canManage
+    if (ready) document.body.dataset.stickyInvite = '1'
+    else delete document.body.dataset.stickyInvite
+    return () => {
+      delete document.body.dataset.stickyInvite
+    }
+  }, [gathering, coachStep, phase, shareDone, canManage])
+
+  useEffect(() => {
     if (!canManage || !coachStep) {
       delete document.body.dataset.demoOpen
       return
@@ -407,7 +428,7 @@ export function EventPage() {
               </button>
             </div>
           </form>
-          <p className="sub" style={{ marginTop: '1rem' }}>
+          <p className="sub stack-mt">
             {t('unlockEventRsvpHint')}{' '}
             <Link viewTransition to={`/rsvp/${gathering.id}`}>
               {t('openRsvp')}
@@ -923,26 +944,34 @@ export function EventPage() {
         </p>
       )}
 
-      <section className="event-stage">
+      <section
+        className={`event-stage ${activePhase === 'invite' ? 'event-stage-slim' : ''}`}
+      >
         <div className="event-stage-copy">
           <div className="event-stage-meta">
-            <span className="chip">{typeLabel}</span>
+            {activePhase !== 'invite' && <span className="chip">{typeLabel}</span>}
             <span className="chip chip-warm">
               {formatDate(gathering.date, localeTag, t('dateTbd'))}
             </span>
-            {gathering.time && <span className="chip chip-muted">{gathering.time}</span>}
+            {activePhase !== 'invite' && gathering.time && (
+              <span className="chip chip-muted">{gathering.time}</span>
+            )}
           </div>
           <h1>{gathering.title}</h1>
-          <p className="event-stage-where">
-            {gathering.location || t('locationTbd')}
-          </p>
-          {gathering.notes && <p className="event-stage-notes">{gathering.notes}</p>}
-          {totals.hasVariable && (
-            <p className="event-stage-notes">{t('hasVariableNote')}</p>
+          {activePhase !== 'invite' && (
+            <>
+              <p className="event-stage-where">
+                {gathering.location || t('locationTbd')}
+              </p>
+              {gathering.notes && <p className="event-stage-notes">{gathering.notes}</p>}
+              {totals.hasVariable && (
+                <p className="event-stage-notes">{t('hasVariableNote')}</p>
+              )}
+            </>
           )}
         </div>
 
-        {showMetrics && (
+        {showMetrics && activePhase !== 'invite' && (
           <div className="event-stage-metrics" aria-label={t('peopleTotal')}>
             <div>
               <span>{t('peopleTotal')}</span>
@@ -998,16 +1027,6 @@ export function EventPage() {
                 ) : (
                   <p className="sub">{t('setupPayLaterHint')}</p>
                 )}
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => {
-                    setPhase('run')
-                    setTab('payments')
-                  }}
-                >
-                  {t('goToPayments')}
-                </button>
               </div>
               <div className="setup-accordion-status" aria-label={t('setupFlowMapLabel')}>
                 <span className={step1Done ? 'done' : ''}>{t('setupStep1Short')}</span>
@@ -1029,6 +1048,9 @@ export function EventPage() {
               className={`panel setup-step ${step1Done && !editingDetails ? 'setup-step-collapsed' : ''}`}
             >
               <div className="setup-step-head">
+                <span className={`setup-step-num ${step1Done ? 'done' : ''}`} aria-hidden>
+                  1
+                </span>
                 <div className="setup-step-copy">
                   <h2>{t('setupStep1')}</h2>
                   <p className="sub">{t('setupStep1Sub')}</p>
@@ -1298,7 +1320,7 @@ export function EventPage() {
                       placeholder={t('menuCardLinkPlaceholder')}
                     />
                   </label>
-                  <div className="form-actions" style={{ marginTop: '0.65rem' }}>
+                  <div className="form-actions stack-mt-xs">
                     <button
                       className="btn btn-accent"
                       type="button"
@@ -1310,7 +1332,7 @@ export function EventPage() {
                   </div>
                 </details>
                 {cardMsg && (
-                  <div className="feedback-banner" role="status" style={{ marginTop: '0.75rem' }}>
+                  <div className="feedback-banner stack-mt-sm" role="status">
                     {cardMsg}
                   </div>
                 )}
@@ -1340,7 +1362,7 @@ export function EventPage() {
                   </div>
                 )}
                 {!safeMediaUrl(gathering.menuCardUrl) && gathering.menuCardUrl && (
-                  <div className="form-actions" style={{ marginTop: '0.75rem' }}>
+                  <div className="form-actions stack-mt-sm">
                     <button
                       className="btn btn-danger btn-sm"
                       type="button"
@@ -1509,7 +1531,7 @@ export function EventPage() {
                               </p>
                             )}
                           </div>
-                          <div style={{ textAlign: 'right' }}>
+                          <div className="text-end">
                             <div className="price">
                               {item.isAlaCarte
                                 ? t('priceVariable')
@@ -1617,10 +1639,9 @@ export function EventPage() {
       {showCodePanel && organizerCode && (
         <details
           ref={codePanelRef}
-          className={`panel organizer-code-panel ${justCreated ? 'is-new' : ''} ${
+          className={`panel organizer-code-panel code-panel-spaced ${justCreated ? 'is-new' : ''} ${
             coachStep === 'code' ? 'coach-target' : ''
           }`}
-          style={{ marginBottom: '1rem' }}
           open={justCreated || coachStep === 'code' || codePanelOpen}
           onToggle={(e) => setCodePanelOpen((e.target as HTMLDetailsElement).open)}
         >
@@ -1637,16 +1658,15 @@ export function EventPage() {
           </p>
           {codeMsg && (
             <div
-              className={`feedback-banner ${codeError ? 'error' : ''}`}
+              className={`feedback-banner stack-mt-sm ${codeError ? 'error' : ''}`}
               role="status"
-              style={{ marginTop: '0.75rem' }}
             >
               {codeMsg}
             </div>
           )}
           {editingCode ? (
             <form onSubmit={(e) => void saveOrganizerCodeEdit(e)}>
-              <label className="full" style={{ marginTop: '0.75rem' }}>
+              <label className="full stack-mt-sm">
                 {t('organizerCode')}
                 <input
                   value={codeDraft}
@@ -1679,7 +1699,7 @@ export function EventPage() {
               </div>
             </form>
           ) : (
-            <div className="share-box" style={{ margin: '0.75rem 0 0' }}>
+            <div className="share-box share-box-spaced">
               <strong>{t('organizerCode')}</strong>
               <code>{organizerCode}</code>
               <button
@@ -1715,7 +1735,7 @@ export function EventPage() {
         </details>
       )}
       {reportMsg && (
-        <p className="allergy" style={{ marginTop: '-0.5rem', marginBottom: '1rem' }}>
+        <p className="allergy report-msg">
           {reportMsg}
         </p>
       )}
@@ -1759,7 +1779,9 @@ export function EventPage() {
               </div>
               <button
                 type="button"
-                className="btn btn-accent btn-sm"
+                className={`btn btn-sm ${
+                  gathering.attendees.length === 0 ? 'btn-ghost' : 'btn-accent'
+                }`}
                 onClick={() => {
                   setShowGuestForm((v) => !v)
                   setGuestForm((prev) => ({ ...prev, asGroup: false }))
@@ -1827,7 +1849,7 @@ export function EventPage() {
                       autoComplete="name"
                       value={guestForm.name}
                       onChange={(e) => setGuestForm({ ...guestForm, name: e.target.value })}
-                      placeholder="Alex"
+                      placeholder={t('placeholderGuestName')}
                     />
                   </label>
                   <label>
@@ -1859,8 +1881,8 @@ export function EventPage() {
                   </label>
                 </div>
                 {gathering.menu.length > 0 && (
-                  <div style={{ marginTop: '0.85rem' }}>
-                    <p className="sub" style={{ marginBottom: '0.5rem' }}>
+                  <div className="menu-pick-block">
+                    <p className="sub stack-mb-xs">
                       {t('pickFromMenu')}
                     </p>
                     <MenuPicker
@@ -1881,7 +1903,7 @@ export function EventPage() {
                     />
                   </div>
                 )}
-                <div className="form-actions" style={{ marginTop: '1rem' }}>
+                <div className="form-actions stack-mt">
                   <button className="btn btn-accent" type="submit" disabled={guestBusy}>
                     {guestBusy ? t('saving') : t('addGuest')}
                   </button>
@@ -2018,7 +2040,7 @@ export function EventPage() {
               </label>
             </div>
             <div className="form-actions">
-              <button className="btn btn-accent btn-sm" type="submit" disabled={payFormBusy}>
+              <button className="btn btn-accent" type="submit" disabled={payFormBusy}>
                 {payFormBusy ? t('saving') : t('paymentSaveInstructions')}
               </button>
             </div>
@@ -2039,7 +2061,7 @@ export function EventPage() {
         <section className="panel">
           <h2>{t('kitchenTitle')}</h2>
           <p className="sub">{t('kitchenSub')}</p>
-          <div className="form-actions" style={{ marginBottom: '0.75rem' }}>
+          <div className="form-actions stack-mb-sm">
             <button
               type="button"
               className="btn btn-sm btn-ghost"
@@ -2142,7 +2164,7 @@ export function EventPage() {
               </span>
             </label>
             <div className="form-actions full">
-              <button className="btn btn-accent btn-sm" type="submit" disabled={detailsBusy}>
+              <button className="btn btn-accent" type="submit" disabled={detailsBusy}>
                 {detailsBusy ? t('saving') : t('saveDetails')}
               </button>
             </div>
@@ -2152,7 +2174,7 @@ export function EventPage() {
               {t('rsvpClosedBanner')}
             </div>
           )}
-          <div className="form-actions" style={{ marginTop: '1rem' }}>
+          <div className="form-actions stack-mt">
             <button className="btn btn-ghost btn-sm" type="button" onClick={openFullReport}>
               {t('openEventReport')}
             </button>
@@ -2168,8 +2190,7 @@ export function EventPage() {
         !shareDone &&
         !guided &&
         canManage && (
-          <div className="sticky-invite-cta" role="region" aria-label={t('nextInviteFriends')}>
-            <p>{t('inviteWhenMenuReady')}</p>
+          <div className="sticky-invite-cta" role="region">
             <button
               type="button"
               className="btn btn-accent"

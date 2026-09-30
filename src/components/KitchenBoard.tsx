@@ -65,7 +65,7 @@ export function KitchenBoard({ gathering }: Props) {
         </button>
         <button
           type="button"
-          className="btn btn-sm btn-accent"
+          className="btn btn-sm btn-ghost"
           onClick={() =>
             window.open(whatsappShareUrl(bookingText), '_blank', 'noopener,noreferrer')
           }
