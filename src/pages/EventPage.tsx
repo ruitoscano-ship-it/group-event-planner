@@ -971,7 +971,7 @@ export function EventPage() {
           )}
         </div>
 
-        {showMetrics && activePhase !== 'invite' && (
+        {showMetrics && (
           <div className="event-stage-metrics" aria-label={t('peopleTotal')}>
             <div>
               <span>{t('peopleTotal')}</span>
